@@ -31,7 +31,7 @@ function HarvestPage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!f.batch_id) return toast.error("Choose a batch");
+    if (!f.batch_id) { toast.error("Choose a batch"); return; }
     const { error } = await supabase.from("harvests").insert({
       batch_id: f.batch_id, harvested_on: f.harvested_on,
       plants_harvested: Number(f.plants_harvested) || 0, total_weight_kg: Number(f.total_weight_kg) || 0,
@@ -39,7 +39,7 @@ function HarvestPage() {
       grade_a: Number(f.grade_a) || 0, grade_b: Number(f.grade_b) || 0, grade_c: Number(f.grade_c) || 0, rejected: Number(f.rejected) || 0,
       notes: f.notes || null,
     });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Harvest recorded");
     setF(empty);
     qc.invalidateQueries({ queryKey: ["harvests"] });

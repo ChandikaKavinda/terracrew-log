@@ -135,7 +135,7 @@ function Dashboard() {
 
   async function markDone(kind: "filter" | "inventory") {
     const { error } = await supabase.from("maintenance_logs").insert({ kind });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success(kind === "filter" ? "Filter check recorded" : "Inventory check recorded");
     qc.invalidateQueries({ queryKey: ["dashboard"] });
   }

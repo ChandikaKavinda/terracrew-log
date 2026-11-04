@@ -30,7 +30,7 @@ function TeamPage() {
     const { error } = makeOwner
       ? await supabase.from("user_roles").insert({ user_id: id, role: "admin" })
       : await supabase.from("user_roles").delete().eq("user_id", id).eq("role", "admin");
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["team"] });
   }
 

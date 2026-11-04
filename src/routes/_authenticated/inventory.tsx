@@ -33,28 +33,28 @@ function InventoryPage() {
 
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
-    if (!f.name.trim()) return toast.error("Item name required");
+    if (!f.name.trim()) { toast.error("Item name required"); return; }
     const { error } = await supabase.from("inventory_items").insert({
       name: f.name.trim().slice(0, 100), category: f.category, unit: f.unit, quantity: Number(f.quantity) || 0, reorder_level: Number(f.reorder_level) || 0,
     });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     setF({ ...f, name: "", quantity: "", reorder_level: "" });
     refresh();
   }
 
   async function move(id: string, sign: 1 | -1) {
     const n = Number(amt[id]);
-    if (!n || n <= 0) return toast.error("Enter an amount first");
+    if (!n || n <= 0) { toast.error("Enter an amount first"); return; }
     const reason = sign > 0 ? "Restocked" : "Used";
     const { error } = await supabase.from("inventory_movements").insert({ item_id: id, change: sign * n, reason });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     setAmt({ ...amt, [id]: "" });
     refresh();
   }
 
   async function markChecked() {
     const { error } = await supabase.from("maintenance_logs").insert({ kind: "inventory" });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Inventory check recorded");
     refresh();
   }

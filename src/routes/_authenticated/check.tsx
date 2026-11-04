@@ -65,9 +65,9 @@ function CheckPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (defective > 25) return toast.error("Defect counts add up to more than 25 plants.");
+    if (defective > 25) { toast.error("Defect counts add up to more than 25 plants."); return; }
     const phV = num(f.ph);
-    if (phV !== null && (phV < 0 || phV > 14)) return toast.error("pH must be between 0 and 14.");
+    if (phV !== null && (phV < 0 || phV > 14)) { toast.error("pH must be between 0 and 14."); return; }
     setBusy(true);
     try {
       const { data: check, error } = await supabase

@@ -38,18 +38,18 @@ function AuthPage() {
   async function signIn(e: React.FormEvent) {
     e.preventDefault();
     const p = schema.safeParse(form);
-    if (!p.success) return toast.error(p.error.issues[0].message);
+    if (!p.success) { toast.error(p.error.issues[0]?.message ?? "Invalid input"); return; }
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email: p.data.email, password: p.data.password });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     navigate({ to: "/dashboard" });
   }
 
   async function signUp(e: React.FormEvent) {
     e.preventDefault();
     const p = schema.safeParse(form);
-    if (!p.success) return toast.error(p.error.issues[0].message);
+    if (!p.success) { toast.error(p.error.issues[0]?.message ?? "Invalid input"); return; }
     setBusy(true);
     const { data, error } = await supabase.auth.signUp({
       email: p.data.email,
@@ -57,7 +57,7 @@ function AuthPage() {
       options: { emailRedirectTo: window.location.origin + "/dashboard", data: { full_name: p.data.name || undefined } },
     });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     if (data.session) navigate({ to: "/dashboard" });
     else toast.success("Check your email to confirm your account, then sign in.");
   }

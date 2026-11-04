@@ -25,12 +25,12 @@ function BatchesPage() {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    if (!f.code.trim()) return toast.error("Give the batch a code, e.g. L-2026-11-A");
+    if (!f.code.trim()) { toast.error("Give the batch a code, e.g. L-2026-11-A"); return; }
     const { error } = await supabase.from("batches").insert({
       code: f.code.trim().slice(0, 50), crop: f.crop.trim() || "Lettuce", variety: f.variety || null,
       seeded_on: f.seeded_on, seeds_sown: num(f.seeds_sown), expected_harvest: f.expected_harvest || null,
     });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Batch created");
     setF({ ...f, code: "", variety: "", seeds_sown: "" });
     qc.invalidateQueries({ queryKey: ["batches"] });
@@ -38,14 +38,14 @@ function BatchesPage() {
 
   async function advance(b: (typeof batches)[number]) {
     const today = toDateKey(new Date());
-    let patch: Record<string, unknown> = {};
+    let patch: { status?: string; transplanted_on?: string; plant_count?: number | null; harvested_on?: string } = {};
     if (b.status === "nursery") {
       const n = prompt("How many plants are being transplanted into the system?", String(b.germinated ?? ""));
       if (n === null) return;
       patch = { status: "growing", transplanted_on: today, plant_count: Number(n) || null };
     } else if (b.status === "growing") patch = { status: "harvested", harvested_on: today };
     const { error } = await supabase.from("batches").update(patch).eq("id", b.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     qc.invalidateQueries({ queryKey: ["batches"] });
   }
 

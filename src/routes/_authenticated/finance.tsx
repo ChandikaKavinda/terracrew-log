@@ -46,9 +46,9 @@ function FinancePage() {
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const amount = Number(f.amount);
-    if (!amount || amount <= 0) return toast.error("Enter an amount");
+    if (!amount || amount <= 0) { toast.error("Enter an amount"); return; }
     const { error } = await supabase.from("transactions").insert({ ...f, amount, description: f.description.slice(0, 300) || null });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     setF({ ...f, amount: "", description: "" });
     qc.invalidateQueries({ queryKey: ["transactions"] });
     qc.invalidateQueries({ queryKey: ["fin-summary"] });
@@ -72,7 +72,7 @@ function FinancePage() {
         <form onSubmit={save} className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <div>
             <Label>Type</Label>
-            <Select value={f.kind} onValueChange={(v) => setF({ ...f, kind: v as "income" | "expense", category: cats[v as "income" | "expense"][0] })}>
+            <Select value={f.kind} onValueChange={(v) => setF({ ...f, kind: v as "income" | "expense", category: cats[v as "income" | "expense"][0] ?? "Other" })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="income">Income</SelectItem><SelectItem value="expense">Expense</SelectItem></SelectContent>
             </Select>
