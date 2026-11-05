@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useProfiles, targetsOf, inRange, GERMINATION_ISSUES } from "@/lib/crop-profiles";
+import { Minus, Plus, RotateCcw } from "lucide-react";
+import { useProfiles, targetsOf, inRange, GERMINATION_ISSUES, zoneOf, defectTagsOf, type Zone } from "@/lib/crop-profiles";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { CheckHistory } from "@/components/check-history";
@@ -12,126 +13,228 @@ import { PageHeader, Section, num } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toDateKey } from "@/lib/reminders";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/check")({
-  head: () => ({ meta: [{ title: "Daily checklist — GreenLog" }] }),
+  validateSearch: (s: Record<string, unknown>): { edit?: string } => (typeof s.edit === "string" ? { edit: s.edit } : {}),
+  head: () => ({ meta: [{ title: "Daily checklist — GreenLog" }, { name: "description", content: "Quick-tap daily greenhouse walk-through." }] }),
   component: CheckPage,
 });
 
 const nowTime = () => new Date().toTimeString().slice(0, 5);
+const SAMPLE = 25;
 
+const ZONE_STYLE: Record<Zone, string> = {
+  Inlet: "bg-primary/15 text-primary border-primary/30",
+  Mid: "bg-accent text-accent-foreground border-accent",
+  Outlet: "bg-secondary text-secondary-foreground border-secondary",
+};
+
+/** Map a crop-specific tag onto the legacy summary columns used by dashboard charts. */
+function legacyKey(tag: string): "macro_deficiency" | "micro_deficiency" | "insect_damage" | "disease" | "tipburn" | "other" {
+  const t = tag.toLowerCase();
+  if (t.includes("macro") || /nitrogen|phosph|potass|calcium|magnes/.test(t)) return "macro_deficiency";
+  if (t.includes("micro") || /iron|mangan|zinc|boron/.test(t)) return "micro_deficiency";
+  if (/insect|aphid|mite|thrip|whitefl|caterp|gnat/.test(t)) return "insect_damage";
+  if (/disease|mildew|botrytis|mould|mold|rot|blight/.test(t)) return "disease";
+  if (t.includes("tip burn") || t.includes("tipburn")) return "tipburn";
+  return "other";
+}
+
+/** Big two-button yes/no for gloved fingers. */
 function YesNo({ label, value, onChange, good }: { label: string; value: boolean; onChange: (v: boolean) => void; good: boolean }) {
   const ok = value === good;
   return (
-    <div className={`flex items-center justify-between rounded-lg border p-3 ${ok ? "" : "border-destructive/50 bg-destructive/5"}`}>
-      <Label className="cursor-pointer">{label}</Label>
-      <div className="flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">{value ? "Yes" : "No"}</span>
-        <Switch checked={value} onCheckedChange={onChange} />
+    <div className={cn("rounded-xl border p-3", !ok && "border-destructive/50 bg-destructive/5")}>
+      <div className="mb-2 text-sm font-medium">{label}</div>
+      <div className="grid grid-cols-2 gap-2">
+        {[true, false].map((v) => (
+          <button key={String(v)} type="button" onClick={() => onChange(v)}
+            className={cn("h-12 rounded-lg border text-base font-semibold transition-colors",
+              value === v ? (v === good ? "border-primary bg-primary text-primary-foreground" : "border-destructive bg-destructive text-destructive-foreground") : "bg-background text-muted-foreground")}>
+            {v ? "Yes" : "No"}
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
+function Pills({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((o) => (
+        <button key={o.value} type="button" onClick={() => onChange(o.value)}
+          className={cn("h-11 min-w-14 rounded-full border px-4 text-sm font-semibold", value === o.value ? "border-primary bg-primary text-primary-foreground" : "bg-background")}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Counter({ label, value, onChange, max, disabled }: { label: string; value: number; onChange: (v: number) => void; max: number; disabled?: boolean }) {
+  const set = (v: number) => onChange(Math.max(0, Math.min(max, v)));
+  return (
+    <div className={cn("rounded-xl border p-3", value > 0 && "border-destructive/50 bg-destructive/5")}>
+      <div className="mb-2 min-h-10 text-sm font-medium leading-tight">{label}</div>
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" size="icon" className="h-12 w-12 shrink-0" disabled={disabled || value === 0} onClick={() => set(value - 1)}><Minus /></Button>
+        <div className="flex-1 text-center text-2xl font-bold tabular-nums">{value}</div>
+        <Button type="button" size="icon" className="h-12 w-12 shrink-0" disabled={disabled} onClick={() => set(value + 1)}><Plus /></Button>
+        <Button type="button" variant="secondary" className="h-12 shrink-0 px-3" disabled={disabled} onClick={() => set(value + 5)}>+5</Button>
+      </div>
+    </div>
+  );
+}
+
+const emptyForm = () => ({
+  check_date: toDateKey(new Date()), check_time: nowTime(), batch_id: "",
+  tank_level: "full", tank_debris: false, water_source: "rain",
+  ec: "", ph: "", water_temp: "", air_temp: "", humidity: "",
+  automation_ok: true, ppe_worn: true,
+  gh_defects: false, gh_defects_notes: "", insects: false, insects_notes: "", leaks: false, leaks_notes: "",
+  flow_ok: true, notes: "",
+});
+const s = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+
 function CheckPage() {
+  const { edit } = Route.useSearch();
   const { data: batches = [] } = useBatches();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const active = batches.filter((b) => b.status === "growing");
   const nursery = batches.filter((b) => b.status === "nursery");
 
-  const [f, setF] = useState({
-    check_date: toDateKey(new Date()),
-    check_time: nowTime(),
-    batch_id: "",
-    tank_level: "full",
-    tank_debris: false,
-    water_source: "rain",
-    ec: "", ph: "", water_temp: "", air_temp: "", humidity: "",
-    automation_ok: true, ppe_worn: true,
-    gh_defects: false, gh_defects_notes: "",
-    insects: false, insects_notes: "",
-    leaks: false, leaks_notes: "",
-    flow_ok: true,
-    notes: "",
-  });
+  const [f, setF] = useState(emptyForm);
   const [growth, setGrowth] = useState(Array.from({ length: 10 }, () => ({ h: "", l: "", v: "" })));
-  const [prev, setPrev] = useState<({ h: number | null; l: number | null; date: string } | null)[]>([]);
+  const [prev, setPrev] = useState<({ h: number | null; l: number | null } | null)[]>([]);
   const [issues, setIssues] = useState<string[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [qNotes, setQNotes] = useState("");
+  const [germ, setGerm] = useState({ batch_id: "", germinated: "", notes: "" });
+  const [busy, setBusy] = useState(false);
+  const [loadedEdit, setLoadedEdit] = useState<string | null>(null);
   const { data: profiles = [] } = useProfiles();
+
   const selBatch = batches.find((b) => b.id === f.batch_id);
-  const t = targetsOf(profiles.find((p) => p.id === selBatch?.profile_id));
+  const active = batches.filter((b) => b.status === "growing" || b.id === f.batch_id);
+  const profile = profiles.find((p) => p.id === selBatch?.profile_id);
+  const t = targetsOf(profile);
+  const tags = defectTagsOf(profile);
+  const up = <K extends keyof ReturnType<typeof emptyForm>>(k: K, v: ReturnType<typeof emptyForm>[K]) => setF((x) => ({ ...x, [k]: v }));
+
+  // Load a checklist for editing
+  const { data: editData } = useQuery({
+    queryKey: ["check-edit", edit],
+    enabled: !!edit,
+    queryFn: async () => {
+      const [c, g, q] = await Promise.all([
+        supabase.from("daily_checks").select("*").eq("id", edit!).single(),
+        supabase.from("growth_measurements").select("*").eq("check_id", edit!),
+        supabase.from("quality_inspections").select("*").eq("check_id", edit!).limit(1),
+      ]);
+      if (c.error) throw c.error;
+      return { check: c.data, growth: g.data ?? [], quality: q.data?.[0] ?? null };
+    },
+  });
+  useEffect(() => {
+    if (!edit) { if (loadedEdit) { setLoadedEdit(null); setF(emptyForm()); setCounts({}); setIssues([]); setQNotes(""); setGerm({ batch_id: "", germinated: "", notes: "" }); } return; }
+    if (!editData || loadedEdit === edit) return;
+    const c = editData.check;
+    setF({
+      check_date: c.check_date, check_time: String(c.check_time).slice(0, 5), batch_id: c.batch_id ?? "",
+      tank_level: c.tank_level ?? "full", tank_debris: c.tank_debris, water_source: c.water_source,
+      ec: s(c.ec), ph: s(c.ph), water_temp: s(c.water_temp), air_temp: s(c.air_temp), humidity: s(c.humidity),
+      automation_ok: c.automation_ok, ppe_worn: c.ppe_worn,
+      gh_defects: c.gh_defects, gh_defects_notes: c.gh_defects_notes ?? "", insects: c.insects, insects_notes: c.insects_notes ?? "",
+      leaks: c.leaks, leaks_notes: c.leaks_notes ?? "", flow_ok: c.flow_ok, notes: c.notes ?? "",
+    });
+    setIssues(c.germination_issues ?? []);
+    setGerm({ batch_id: c.nursery_batch_id ?? "", germinated: s(c.germinated_count), notes: c.germination_notes ?? "" });
+    setGrowth(Array.from({ length: 10 }, (_, i) => {
+      const r = editData.growth.find((x) => x.plant_no === i + 1);
+      return { h: s(r?.height_cm), l: s(r?.leaf_count), v: r?.variety ?? "" };
+    }));
+    const q = editData.quality;
+    const dc = (q?.defect_counts ?? {}) as Record<string, number>;
+    setCounts(Object.keys(dc).length ? dc : q ? {
+      "Macro-nutrient deficiency": q.macro_deficiency, "Micro-nutrient deficiency": q.micro_deficiency, "Insect damage": q.insect_damage,
+      Disease: q.disease, "Tip burn": q.tipburn, Other: q.other,
+    } : {});
+    setQNotes(q?.notes ?? "");
+    setLoadedEdit(edit);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [edit, editData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Previous sentinel values for autofill
   const { data: lastGrowth } = useQuery({
     queryKey: ["growth-prev", f.batch_id, f.check_date],
     enabled: !!f.batch_id,
-    queryFn: async () => {
-      const { data } = await supabase.from("growth_measurements").select("*").eq("batch_id", f.batch_id).lt("measured_on", f.check_date).order("measured_on", { ascending: false }).limit(100);
-      return data ?? [];
-    },
+    queryFn: async () => (await supabase.from("growth_measurements").select("*").eq("batch_id", f.batch_id).lt("measured_on", f.check_date).order("measured_on", { ascending: false }).limit(100)).data ?? [],
   });
   useEffect(() => {
     if (!f.batch_id) return;
     const rows = lastGrowth ?? [];
     const p = Array.from({ length: 10 }, (_, i) => {
       const r = rows.find((x) => x.plant_no === i + 1);
-      return r ? { h: r.height_cm, l: r.leaf_count, date: r.measured_on, v: r.variety } : null;
+      return r ? { h: r.height_cm, l: r.leaf_count, v: r.variety } : null;
     });
     setPrev(p);
+    if (edit) return; // keep the saved values when editing
     setGrowth(p.map((x) => ({ h: x?.h != null ? String(x.h) : "", l: x?.l != null ? String(x.l) : "", v: x?.v ?? selBatch?.variety ?? "" })));
   }, [lastGrowth, f.batch_id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [q, setQ] = useState({ macro: "0", micro: "0", insect: "0", disease: "0", tipburn: "0", other: "0", notes: "" });
-  const [germ, setGerm] = useState({ batch_id: "", germinated: "", notes: "" });
-  const [busy, setBusy] = useState(false);
-  const up = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((s) => ({ ...s, [k]: v }));
 
-  const defective = ["macro", "micro", "insect", "disease", "tipburn", "other"].reduce((a, k) => a + (Number(q[k as keyof typeof q]) || 0), 0);
+  const defective = Object.entries(counts).filter(([k]) => tags.includes(k)).reduce((a, [, v]) => a + (v || 0), 0);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (defective > 25) { toast.error("Defect counts add up to more than 25 plants."); return; }
+    if (defective > SAMPLE) { toast.error(`Defect counts add up to more than ${SAMPLE} plants.`); return; }
     const phV = num(f.ph);
     if (phV !== null && (phV < 0 || phV > 14)) { toast.error("pH must be between 0 and 14."); return; }
     setBusy(true);
     try {
-      const { data: check, error } = await supabase
-        .from("daily_checks")
-        .insert({
-          check_date: f.check_date, check_time: f.check_time,
-          batch_id: f.batch_id || null,
-          tank_level: f.tank_level, tank_debris: f.tank_debris, water_source: f.water_source,
-          ec: num(f.ec), ph: phV, water_temp: num(f.water_temp), air_temp: num(f.air_temp), humidity: num(f.humidity),
-          automation_ok: f.automation_ok, ppe_worn: f.ppe_worn,
-          gh_defects: f.gh_defects, gh_defects_notes: f.gh_defects_notes || null,
-          insects: f.insects, insects_notes: f.insects_notes || null,
-          leaks: f.leaks, leaks_notes: f.leaks_notes || null,
-          flow_ok: f.flow_ok,
-          germination_notes: germ.notes || null,
-          germination_issues: issues,
-          notes: f.notes || null,
-        })
-        .select()
-        .single();
-      if (error) throw error;
+      const payload = {
+        check_date: f.check_date, check_time: f.check_time, batch_id: f.batch_id || null,
+        tank_level: f.tank_level, tank_debris: f.tank_debris, water_source: f.water_source,
+        ec: num(f.ec), ph: phV, water_temp: num(f.water_temp), air_temp: num(f.air_temp), humidity: num(f.humidity),
+        automation_ok: f.automation_ok, ppe_worn: f.ppe_worn,
+        gh_defects: f.gh_defects, gh_defects_notes: f.gh_defects_notes || null,
+        insects: f.insects, insects_notes: f.insects_notes || null,
+        leaks: f.leaks, leaks_notes: f.leaks_notes || null, flow_ok: f.flow_ok,
+        germination_notes: germ.notes || null, germination_issues: issues,
+        nursery_batch_id: germ.batch_id || null, germinated_count: germ.germinated ? Number(germ.germinated) : null,
+        notes: f.notes || null,
+      };
+      let checkId: string;
+      if (edit) {
+        const { error } = await supabase.from("daily_checks").update(payload).eq("id", edit);
+        if (error) throw error;
+        checkId = edit;
+      } else {
+        const { data, error } = await supabase.from("daily_checks").insert(payload).select().single();
+        if (error) throw error;
+        checkId = data.id;
+      }
 
       if (f.batch_id) {
         const rows = growth
-          .map((g, i) => ({ batch_id: f.batch_id, check_id: check.id, plant_no: i + 1, variety: g.v || null, measured_on: f.check_date, height_cm: num(g.h), leaf_count: g.l ? Math.round(Number(g.l)) : null }))
+          .map((g, i) => ({ batch_id: f.batch_id, check_id: checkId, plant_no: i + 1, zone: zoneOf(i + 1), variety: g.v || null, measured_on: f.check_date, height_cm: num(g.h), leaf_count: g.l ? Math.round(Number(g.l)) : null }))
           .filter((r) => r.height_cm !== null || r.leaf_count !== null);
         if (rows.length) {
           const { error: ge } = await supabase.from("growth_measurements").upsert(rows, { onConflict: "batch_id,plant_no,measured_on" });
           if (ge) throw ge;
         }
-        const { error: qe } = await supabase.from("quality_inspections").insert({
-          batch_id: f.batch_id, check_id: check.id, inspected_on: f.check_date, inspected_count: 25,
-          healthy: 25 - defective,
-          macro_deficiency: Number(q.macro) || 0, micro_deficiency: Number(q.micro) || 0,
-          insect_damage: Number(q.insect) || 0, disease: Number(q.disease) || 0,
-          tipburn: Number(q.tipburn) || 0, other: Number(q.other) || 0, notes: q.notes || null,
-        });
+        const used: Record<string, number> = {};
+        const legacy = { macro_deficiency: 0, micro_deficiency: 0, insect_damage: 0, disease: 0, tipburn: 0, other: 0 };
+        for (const tag of tags) { const v = counts[tag] || 0; used[tag] = v; legacy[legacyKey(tag)] += v; }
+        const qrow = { batch_id: f.batch_id, check_id: checkId, inspected_on: f.check_date, inspected_count: SAMPLE, healthy: SAMPLE - defective, ...legacy, defect_counts: used, notes: qNotes || null };
+        const existing = edit ? editData?.quality?.id : undefined;
+        const { error: qe } = existing
+          ? await supabase.from("quality_inspections").update(qrow).eq("id", existing)
+          : await supabase.from("quality_inspections").insert(qrow);
         if (qe) throw qe;
       }
       if (germ.batch_id && germ.germinated) {
@@ -139,8 +242,8 @@ function CheckPage() {
         if (be) throw be;
       }
       await qc.invalidateQueries();
-      toast.success("Checklist saved");
-      navigate({ to: "/dashboard" });
+      toast.success(edit ? "Checklist updated" : "Checklist saved");
+      navigate({ to: edit ? "/check" : "/dashboard", search: {} });
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -153,25 +256,36 @@ function CheckPage() {
     return (
       <div>
         <Label>{label}</Label>
-        <Input type="number" step="0.01" inputMode="decimal" value={f[k]} onChange={(e) => up(k, e.target.value)} className={ok === false ? "border-destructive" : ""} />
+        <Input type="number" step="0.01" inputMode="decimal" value={f[k]} onChange={(e) => up(k, e.target.value)} className={cn("h-12 text-lg", ok === false && "border-destructive")} />
         <p className={`mt-1 text-xs ${ok === false ? "text-destructive" : "text-muted-foreground"}`}>Target {min}–{max}{ok === false ? " · out of range" : ""}</p>
       </div>
     );
   };
 
+  const zoneAvg = (z: Zone) => {
+    const hs = growth.map((g, i) => ({ g, z: zoneOf(i + 1) })).filter((x) => x.z === z && x.g.h !== "").map((x) => Number(x.g.h));
+    return hs.length ? (hs.reduce((a, b) => a + b, 0) / hs.length).toFixed(1) : "–";
+  };
+
   return (
     <div className="space-y-5">
     <form onSubmit={submit} className="space-y-5">
-      <PageHeader title="Daily checklist" sub="Fill once per day. Readings feed the dashboard charts." />
+      <PageHeader title={edit ? "Edit checklist" : "Daily checklist"} sub={edit ? "You are editing a saved checklist. Every section below can be changed." : "Quick-tap walk-through. Fill once per day."} />
+      {edit && (
+        <div className="flex items-center justify-between rounded-xl border border-primary/40 bg-primary/10 p-3 text-sm">
+          <span>Editing checklist from <b>{f.check_date}</b></span>
+          <Button type="button" variant="outline" size="sm" onClick={() => navigate({ to: "/check", search: {} })}>Cancel edit</Button>
+        </div>
+      )}
 
       <Section title="When">
         <div className="grid gap-4 sm:grid-cols-3">
-          <div><Label>Date</Label><Input type="date" value={f.check_date} onChange={(e) => up("check_date", e.target.value)} /></div>
-          <div><Label>Time</Label><Input type="time" value={f.check_time} onChange={(e) => up("check_time", e.target.value)} /></div>
+          <div><Label>Date</Label><Input className="h-12" type="date" value={f.check_date} onChange={(e) => up("check_date", e.target.value)} /></div>
+          <div><Label>Time</Label><Input className="h-12" type="time" value={f.check_time} onChange={(e) => up("check_time", e.target.value)} /></div>
           <div>
             <Label>Growing batch</Label>
             <Select value={f.batch_id} onValueChange={(v) => up("batch_id", v)}>
-              <SelectTrigger><SelectValue placeholder={active.length ? "Choose batch" : "No growing batches"} /></SelectTrigger>
+              <SelectTrigger className="h-12"><SelectValue placeholder={active.length ? "Choose batch" : "No growing batches"} /></SelectTrigger>
               <SelectContent>{active.map((b) => <SelectItem key={b.id} value={b.id}>{b.code} · {b.crop}</SelectItem>)}</SelectContent>
             </Select>
           </div>
@@ -179,36 +293,19 @@ function CheckPage() {
       </Section>
 
       <Section title="Nutrient tank & water">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <Label>Water level</Label>
-            <Select value={f.tank_level} onValueChange={(v) => up("tank_level", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="full">Full</SelectItem>
-                <SelectItem value="3/4">3/4</SelectItem>
-                <SelectItem value="1/2">1/2</SelectItem>
-                <SelectItem value="1/4">1/4</SelectItem>
-                <SelectItem value="low">Low — refill</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="space-y-4">
+          <div><Label className="mb-2 block">Water level</Label>
+            <Pills value={f.tank_level} onChange={(v) => up("tank_level", v)} options={[{ value: "full", label: "Full" }, { value: "3/4", label: "3/4" }, { value: "1/2", label: "1/2" }, { value: "1/4", label: "1/4" }, { value: "low", label: "Low" }]} />
           </div>
-          <div>
-            <Label>Running on</Label>
-            <Select value={f.water_source} onValueChange={(v) => up("water_source", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="rain">Rain water</SelectItem>
-                <SelectItem value="tap">Tap water</SelectItem>
-              </SelectContent>
-            </Select>
+          <div><Label className="mb-2 block">Running on</Label>
+            <Pills value={f.water_source} onChange={(v) => up("water_source", v)} options={[{ value: "rain", label: "Rain water" }, { value: "tap", label: "Tap water" }]} />
           </div>
-          <div className="flex items-end"><div className="w-full"><YesNo label="Debris in tank?" value={f.tank_debris} onChange={(v) => up("tank_debris", v)} good={false} /></div></div>
+          <div className="max-w-sm"><YesNo label="Debris in tank?" value={f.tank_debris} onChange={(v) => up("tank_debris", v)} good={false} /></div>
         </div>
       </Section>
 
-      <Section title="Readings" desc={selBatch ? `Targets from ${profiles.find((p) => p.id === selBatch.profile_id)?.name ?? "default lettuce"} profile.` : "Default lettuce targets. Choose a batch to use its crop profile."}>
-        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <Section title="Readings" desc={selBatch ? `Targets from ${profile?.name ?? "default lettuce"} profile.` : "Default lettuce targets. Choose a batch to use its crop profile."}>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {reading("ec", "EC (mS/cm)", t.ec_min, t.ec_max)}
           {reading("ph", "pH", t.ph_min, t.ph_max)}
           {reading("water_temp", "Water temp (°C)", t.water_temp_min, t.water_temp_max)}
@@ -218,7 +315,7 @@ function CheckPage() {
       </Section>
 
       <Section title="System & safety">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <YesNo label="Automation system working" value={f.automation_ok} onChange={(v) => up("automation_ok", v)} good />
           <YesNo label="PPE worn" value={f.ppe_worn} onChange={(v) => up("ppe_worn", v)} good />
           <YesNo label="Channel flow is good" value={f.flow_ok} onChange={(v) => up("flow_ok", v)} good />
@@ -227,62 +324,70 @@ function CheckPage() {
           <YesNo label="Insects seen" value={f.insects} onChange={(v) => up("insects", v)} good={false} />
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          {f.leaks && <Input placeholder="Where is the leak?" value={f.leaks_notes} onChange={(e) => up("leaks_notes", e.target.value)} />}
-          {f.gh_defects && <Input placeholder="Describe greenhouse defect" value={f.gh_defects_notes} onChange={(e) => up("gh_defects_notes", e.target.value)} />}
-          {f.insects && <Input placeholder="Which insects / where?" value={f.insects_notes} onChange={(e) => up("insects_notes", e.target.value)} />}
+          {f.leaks && <Input className="h-12" placeholder="Where is the leak?" value={f.leaks_notes} onChange={(e) => up("leaks_notes", e.target.value)} />}
+          {f.gh_defects && <Input className="h-12" placeholder="Describe greenhouse defect" value={f.gh_defects_notes} onChange={(e) => up("gh_defects_notes", e.target.value)} />}
+          {f.insects && <Input className="h-12" placeholder="Which insects / where?" value={f.insects_notes} onChange={(e) => up("insects_notes", e.target.value)} />}
         </div>
       </Section>
 
-      <Section title="Growth — 10 fixed sample plants" desc={f.batch_id ? "Yesterday's values are filled in — just change what grew." : "Choose a growing batch above to record growth."}>
+      <Section title="Sentinel plants — 10 fixed plants by channel zone" desc={f.batch_id ? "Plants 1–3 Inlet · 4–7 Mid · 8–10 Outlet. Previous values are filled in — change what grew." : "Choose a growing batch above to record growth."}>
+        <div className="mb-3 flex flex-wrap gap-2 text-xs">
+          {(["Inlet", "Mid", "Outlet"] as Zone[]).map((z) => <Badge key={z} variant="outline" className={cn("px-3 py-1", ZONE_STYLE[z])}>{z} avg height: {zoneAvg(z)} cm</Badge>)}
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {growth.map((g, i) => {
-            const set = (k: "h" | "l" | "v", val: string) => setGrowth((s) => s.map((x, j) => (j === i ? { ...x, [k]: val } : x)));
-            const p = prev[i];
+            const set = (k: "h" | "l" | "v", val: string) => setGrowth((x) => x.map((y, j) => (j === i ? { ...y, [k]: val } : y)));
+            const p = prev[i]; const z = zoneOf(i + 1);
+            const leaves = Number(g.l) || 0;
             return (
-              <div key={i} className="rounded-lg border p-2">
-                <div className="mb-1 flex items-center justify-between text-xs font-semibold text-muted-foreground">
-                  <span>Plant #{i + 1}</span>
+              <div key={i} className={cn("rounded-xl border-2 p-2", ZONE_STYLE[z])}>
+                <div className="mb-1 flex items-center justify-between text-xs font-bold"><span>#{i + 1}</span><span>{z}</span></div>
+                <Input disabled={!f.batch_id} className="mb-1 h-9 bg-background text-xs" placeholder="Variety" value={g.v} onChange={(e) => set("v", e.target.value)} />
+                <Input disabled={!f.batch_id} className="h-11 bg-background" inputMode="decimal" placeholder="Height cm" type="number" step="0.1" value={g.h} onChange={(e) => set("h", e.target.value)} />
+                <div className="mt-1 flex items-center gap-1">
+                  <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" disabled={!f.batch_id || leaves === 0} onClick={() => set("l", String(Math.max(0, leaves - 1)))}><Minus /></Button>
+                  <div className="flex-1 text-center"><div className="text-lg font-bold tabular-nums text-foreground">{g.l || 0}</div><div className="text-[10px] text-muted-foreground">leaves</div></div>
+                  <Button type="button" size="icon" className="h-11 w-11 shrink-0" disabled={!f.batch_id} onClick={() => set("l", String(leaves + 1))}><Plus /></Button>
                 </div>
-                <Input disabled={!f.batch_id} className="mb-1 h-8 text-xs" placeholder="Variety" value={g.v} onChange={(e) => set("v", e.target.value)} />
-                <Input disabled={!f.batch_id} placeholder="Height cm" type="number" step="0.1" value={g.h} onChange={(e) => set("h", e.target.value)} />
-                <Input disabled={!f.batch_id} className="mt-1" placeholder="Leaves" type="number" value={g.l} onChange={(e) => set("l", e.target.value)} />
-                {p && <Badge variant="secondary" className="mt-1 w-full justify-center text-[10px] font-normal">Prev {p.h ?? "–"} cm · {p.l ?? "–"} lv</Badge>}
+                {p && <div className="mt-1 text-center text-[10px] text-muted-foreground">Prev {p.h ?? "–"} cm · {p.l ?? "–"} lv</div>}
               </div>
             );
           })}
         </div>
       </Section>
 
-      <Section title="Quality — 25 random plants" desc="How many of the 25 plants show each problem?">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {([["macro", "Macro-nutrient deficiency (N, P, K…)"], ["micro", "Micro-nutrient deficiency (Fe, Mn…)"], ["insect", "Insect damage"], ["disease", "Disease"], ["tipburn", "Tip burn"], ["other", "Other"]] as const).map(([k, l]) => (
-            <div key={k}>
-              <Label className="text-xs">{l}</Label>
-              <Input disabled={!f.batch_id} type="number" min={0} max={25} value={q[k]} onChange={(e) => setQ({ ...q, [k]: e.target.value })} />
-            </div>
+      <Section title={`Quality — ${SAMPLE} random plants`} desc={`${profile ? profile.name : "Default"} defect list. Tap + for each affected plant.`}>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {tags.map((tag) => (
+            <Counter key={tag} label={tag} value={counts[tag] || 0} max={SAMPLE} disabled={!f.batch_id} onChange={(v) => setCounts((c) => ({ ...c, [tag]: v }))} />
           ))}
         </div>
-        <p className="mt-2 text-sm">Healthy: <b>{Math.max(0, 25 - defective)}</b> / 25</p>
-        <Input disabled={!f.batch_id} className="mt-2" placeholder="Symptoms seen (yellowing, spots…)" value={q.notes} onChange={(e) => setQ({ ...q, notes: e.target.value })} />
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className={cn("rounded-full px-4 py-2 text-sm font-semibold", defective > SAMPLE ? "bg-destructive text-destructive-foreground" : "bg-primary/15 text-primary")}>
+            Healthy {Math.max(0, SAMPLE - defective)} / {SAMPLE} · Defective {defective}
+          </div>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setCounts({})}><RotateCcw className="h-4 w-4" /> Reset</Button>
+        </div>
+        <Input disabled={!f.batch_id} className="mt-3 h-12" placeholder="Symptoms seen (yellowing, spots…)" value={qNotes} onChange={(e) => setQNotes(e.target.value)} />
       </Section>
 
       <Section title="Nursery germination">
         <div className="grid gap-3 sm:grid-cols-3">
           <Select value={germ.batch_id} onValueChange={(v) => setGerm({ ...germ, batch_id: v })}>
-            <SelectTrigger><SelectValue placeholder={nursery.length ? "Nursery batch" : "No nursery batches"} /></SelectTrigger>
-            <SelectContent>{nursery.map((b) => <SelectItem key={b.id} value={b.id}>{b.code} · {b.seeds_sown ?? "?"} seeds</SelectItem>)}</SelectContent>
+            <SelectTrigger className="h-12"><SelectValue placeholder={nursery.length ? "Nursery batch" : "No nursery batches"} /></SelectTrigger>
+            <SelectContent>{batches.filter((b) => b.status === "nursery" || b.id === germ.batch_id).map((b) => <SelectItem key={b.id} value={b.id}>{b.code} · {b.seeds_sown ?? "?"} seeds</SelectItem>)}</SelectContent>
           </Select>
-          <Input type="number" placeholder="Seeds germinated so far" value={germ.germinated} onChange={(e) => setGerm({ ...germ, germinated: e.target.value })} />
+          <Input className="h-12" type="number" placeholder="Seeds germinated so far" value={germ.germinated} onChange={(e) => setGerm({ ...germ, germinated: e.target.value })} />
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {GERMINATION_ISSUES.map((g) => (
-            <label key={g} className="flex cursor-pointer items-center gap-2 rounded-lg border p-2 text-sm">
-              <Checkbox checked={issues.includes(g)} onCheckedChange={(c) => setIssues((s) => (c ? [...s, g] : s.filter((x) => x !== g)))} />
+            <label key={g} className={cn("flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm", issues.includes(g) && "border-destructive/50 bg-destructive/5")}>
+              <Checkbox className="h-5 w-5" checked={issues.includes(g)} onCheckedChange={(c) => setIssues((x) => (c ? [...x, g] : x.filter((y) => y !== g)))} />
               {g}
             </label>
           ))}
         </div>
-        <Input className="mt-3" placeholder="Other nursery observations (optional)" value={germ.notes} onChange={(e) => setGerm({ ...germ, notes: e.target.value })} />
+        <Input className="mt-3 h-12" placeholder="Other nursery observations (optional)" value={germ.notes} onChange={(e) => setGerm({ ...germ, notes: e.target.value })} />
       </Section>
 
       <Section title="Other notes">
@@ -290,7 +395,7 @@ function CheckPage() {
       </Section>
 
       <div className="sticky bottom-4 flex justify-end">
-        <Button size="lg" disabled={busy} className="shadow-lg">{busy ? "Saving…" : "Submit checklist"}</Button>
+        <Button size="lg" disabled={busy} className="h-14 px-8 text-base shadow-lg">{busy ? "Saving…" : edit ? "Save changes" : "Submit checklist"}</Button>
       </div>
     </form>
     <CheckHistory />
