@@ -2,10 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useBatches, useMe } from "@/lib/use-me";
-import { useProfiles, DEFAULT_TARGETS, type CropProfile } from "@/lib/crop-profiles";
+import { useProfiles } from "@/lib/crop-profiles";
 import { deleteRow, updateRow } from "@/lib/db-actions";
 import { PageHeader, Section, num } from "@/components/page-header";
 import { FieldsDialog, DeleteButton, EditButton, toVals, fromVals, type Field } from "@/components/edit-dialog";
@@ -17,25 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toDateKey } from "@/lib/reminders";
 
 export const Route = createFileRoute("/_authenticated/batches")({
-  head: () => ({ meta: [{ title: "Batches & crop profiles — GreenLog" }] }),
+  head: () => ({ meta: [{ title: "Batches — GreenLog" }] }),
   component: BatchesPage,
 });
 
 const steps = ["nursery", "growing", "harvested"] as const;
 
-const profileFields: Field[] = [
-  { key: "name", label: "Profile name", full: true },
-  { key: "crop", label: "Crop" },
-  { key: "season", label: "Season (e.g. Yala, Maha, Monsoon)" },
-  { key: "ec_min", label: "EC min (mS/cm)", type: "number" }, { key: "ec_max", label: "EC max", type: "number" },
-  { key: "ph_min", label: "pH min", type: "number" }, { key: "ph_max", label: "pH max", type: "number" },
-  { key: "water_temp_min", label: "Water temp min (°C)", type: "number" }, { key: "water_temp_max", label: "Water temp max", type: "number" },
-  { key: "air_temp_min", label: "Greenhouse temp min (°C)", type: "number" }, { key: "air_temp_max", label: "Greenhouse temp max", type: "number" },
-  { key: "humidity_min", label: "Humidity min (%)", type: "number" }, { key: "humidity_max", label: "Humidity max", type: "number" },
-  { key: "grade_a_min_g", label: "Grade A min weight (g)", type: "number" }, { key: "grade_a_min_leaves", label: "Grade A min leaves", type: "number" },
-  { key: "grade_b_min_g", label: "Grade B min weight (g)", type: "number" }, { key: "grade_b_min_leaves", label: "Grade B min leaves", type: "number" },
-  { key: "notes", label: "Notes", full: true },
-];
 
 function BatchesPage() {
   const { data: batches = [] } = useBatches();
@@ -44,7 +30,6 @@ function BatchesPage() {
   const qc = useQueryClient();
   const [f, setF] = useState({ code: "", crop: "Lettuce", variety: "", seeded_on: toDateKey(new Date()), seeds_sown: "", expected_harvest: "", profile_id: "" });
   const [editBatch, setEditBatch] = useState<(typeof batches)[number] | null>(null);
-  const [editProfile, setEditProfile] = useState<CropProfile | "new" | null>(null);
 
   const refresh = () => { qc.invalidateQueries({ queryKey: ["batches"] }); qc.invalidateQueries({ queryKey: ["crop_profiles"] }); };
   const profileName = (id: string | null) => profiles.find((p) => p.id === id)?.name;
@@ -91,38 +76,8 @@ function BatchesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Batches" sub="Follow each batch from nursery to harvest." />
+      <PageHeader title="Batches" sub="Follow each batch from nursery to harvest. Set crop targets on the Crop profiles page." />
 
-      <Section title="Crop profiles" desc="Seasonal targets for EC, pH, temperature, humidity and harvest grades. Assign one to each batch.">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {profiles.map((p) => (
-            <div key={p.id} className="rounded-lg border p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-semibold">{p["name"]}</div>
-                  <div className="text-xs text-muted-foreground">{p["crop"]}{p.season ? ` · ${p.season}` : ""}</div>
-                </div>
-                <div className="flex">
-                  <EditButton onClick={() => setEditProfile(p)} />
-                  <DeleteButton what={`profile ${p["name"]}`} disabled={!me?.isOwner} onConfirm={async () => { const e = await deleteRow("crop_profiles", p.id); refresh(); return e; }} />
-                </div>
-              </div>
-              <dl className="mt-2 grid grid-cols-2 gap-x-2 text-xs">
-                <dt className="text-muted-foreground">EC</dt><dd>{p.ec_min ?? "?"}–{p.ec_max ?? "?"}</dd>
-                <dt className="text-muted-foreground">pH</dt><dd>{p.ph_min ?? "?"}–{p.ph_max ?? "?"}</dd>
-                <dt className="text-muted-foreground">Water °C</dt><dd>{p.water_temp_min ?? "?"}–{p.water_temp_max ?? "?"}</dd>
-                <dt className="text-muted-foreground">Air °C</dt><dd>{p.air_temp_min ?? "?"}–{p.air_temp_max ?? "?"}</dd>
-                <dt className="text-muted-foreground">Humidity</dt><dd>{p.humidity_min ?? "?"}–{p.humidity_max ?? "?"}%</dd>
-                <dt className="text-muted-foreground">Grade A</dt><dd>≥{p.grade_a_min_g ?? "?"} g, ≥{p.grade_a_min_leaves ?? 0} leaves</dd>
-                <dt className="text-muted-foreground">Grade B</dt><dd>≥{p.grade_b_min_g ?? "?"} g</dd>
-              </dl>
-            </div>
-          ))}
-          <button onClick={() => setEditProfile("new")} className="flex min-h-32 items-center justify-center gap-2 rounded-lg border border-dashed text-muted-foreground hover:bg-muted/50">
-            <Plus className="h-4 w-4" /> New crop profile
-          </button>
-        </div>
-      </Section>
 
       <Section title="Start a new batch">
         <form onSubmit={create} className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -194,26 +149,6 @@ function BatchesPage() {
           const e = await updateRow("batches", editBatch.id, patch);
           if (!e) { toast.success("Batch updated"); refresh(); }
           return e;
-        }}
-      />
-      <FieldsDialog
-        open={!!editProfile} onOpenChange={(o) => !o && setEditProfile(null)}
-        title={editProfile === "new" ? "New crop profile" : "Edit crop profile"} fields={profileFields}
-        initial={editProfile === "new" ? toVals({ ...DEFAULT_TARGETS, crop: "Lettuce" }, profileFields) : editProfile ? toVals(editProfile, profileFields) : {}}
-        onSave={async (v) => {
-          const patch = fromVals(v, profileFields);
-          if (!patch["name"]) return "Give the profile a name";
-          if (!patch["crop"]) patch["crop"] = "Lettuce";
-          if (editProfile === "new") {
-            const { error } = await supabase.from("crop_profiles").insert(patch as never);
-            if (error) return error.message;
-          } else if (editProfile) {
-            const e = await updateRow("crop_profiles", editProfile.id, patch);
-            if (e) return e;
-          }
-          toast.success("Profile saved");
-          refresh();
-          return null;
         }}
       />
     </div>
