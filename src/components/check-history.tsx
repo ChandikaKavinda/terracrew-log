@@ -62,9 +62,9 @@ export function CheckHistory() {
         open={!!edit} onOpenChange={(o) => !o && setEdit(null)} title={`Edit checklist ${edit?.check_date ?? ""}`}
         fields={fields} initial={edit ? toVals(edit, fields) : {}}
         onSave={async (v) => {
-          if (!edit) return;
+          if (!edit) return null;
           const patch = fromVals(v, fields);
-          const ph = patch.ph as number | null;
+          const ph = patch["ph"] as number | null;
           if (ph !== null && (ph < 0 || ph > 14)) return "pH must be between 0 and 14.";
           const e = await updateRow("daily_checks", edit.id, patch);
           if (!e) { toast.success("Checklist updated"); qc.invalidateQueries(); }

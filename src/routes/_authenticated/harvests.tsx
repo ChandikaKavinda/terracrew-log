@@ -139,7 +139,7 @@ function HarvestPage() {
         open={!!edit} onOpenChange={(o) => !o && setEdit(null)} title="Edit harvest" fields={fields}
         initial={edit ? toVals(edit, fields) : {}}
         onSave={async (v) => {
-          if (!edit) return;
+          if (!edit) return null;
           const patch = fromVals(v, fields);
           for (const k of ["plants_harvested", "total_weight_kg", "grade_a", "grade_b", "grade_c", "rejected"]) patch[k] = patch[k] ?? 0;
           const e = await updateRow("harvests", edit.id, patch);

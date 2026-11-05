@@ -51,7 +51,7 @@ function BatchesPage() {
 
   const batchFields: Field[] = [
     { key: "code", label: "Code" }, { key: "crop", label: "Crop" }, { key: "variety", label: "Variety" },
-    { key: "profile_id", label: "Crop profile", type: "select", options: [{ value: "__none", label: "None (default targets)" }, ...profiles.map((p) => ({ value: p.id, label: p.name }))] },
+    { key: "profile_id", label: "Crop profile", type: "select", options: [{ value: "__none", label: "None (default targets)" }, ...profiles.map((p) => ({ value: p.id, label: p["name"] }))] },
     { key: "status", label: "Stage", type: "select", options: steps.map((s) => ({ value: s, label: s })) },
     { key: "seeded_on", label: "Seeded on", type: "date" },
     { key: "seeds_sown", label: "Seeds sown", type: "number" }, { key: "germinated", label: "Germinated", type: "number" },
@@ -99,12 +99,12 @@ function BatchesPage() {
             <div key={p.id} className="rounded-lg border p-4">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="font-semibold">{p.name}</div>
-                  <div className="text-xs text-muted-foreground">{p.crop}{p.season ? ` · ${p.season}` : ""}</div>
+                  <div className="font-semibold">{p["name"]}</div>
+                  <div className="text-xs text-muted-foreground">{p["crop"]}{p.season ? ` · ${p.season}` : ""}</div>
                 </div>
                 <div className="flex">
                   <EditButton onClick={() => setEditProfile(p)} />
-                  <DeleteButton what={`profile ${p.name}`} disabled={!me?.isOwner} onConfirm={async () => { const e = await deleteRow("crop_profiles", p.id); refresh(); return e; }} />
+                  <DeleteButton what={`profile ${p["name"]}`} disabled={!me?.isOwner} onConfirm={async () => { const e = await deleteRow("crop_profiles", p.id); refresh(); return e; }} />
                 </div>
               </div>
               <dl className="mt-2 grid grid-cols-2 gap-x-2 text-xs">
@@ -133,7 +133,7 @@ function BatchesPage() {
             <Label>Crop profile</Label>
             <Select value={f.profile_id} onValueChange={(v) => setF({ ...f, profile_id: v })}>
               <SelectTrigger><SelectValue placeholder={profiles.length ? "Choose profile" : "No profiles yet"} /></SelectTrigger>
-              <SelectContent>{profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+              <SelectContent>{profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p["name"]}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div><Label>Seeded on</Label><Input type="date" value={f.seeded_on} onChange={(e) => setF({ ...f, seeded_on: e.target.value })} /></div>
@@ -187,10 +187,10 @@ function BatchesPage() {
         open={!!editBatch} onOpenChange={(o) => !o && setEditBatch(null)} title={`Edit batch ${editBatch?.code ?? ""}`}
         fields={batchFields} initial={editBatch ? toVals(editBatch, batchFields) : {}}
         onSave={async (v) => {
-          if (!editBatch) return;
+          if (!editBatch) return null;
           const patch = fromVals(v, batchFields);
-          if (!patch.code) return "Code is required";
-          if (!patch.crop) patch.crop = "Lettuce";
+          if (!patch["code"]) return "Code is required";
+          if (!patch["crop"]) patch["crop"] = "Lettuce";
           const e = await updateRow("batches", editBatch.id, patch);
           if (!e) { toast.success("Batch updated"); refresh(); }
           return e;
@@ -202,8 +202,8 @@ function BatchesPage() {
         initial={editProfile === "new" ? toVals({ ...DEFAULT_TARGETS, crop: "Lettuce" }, profileFields) : editProfile ? toVals(editProfile, profileFields) : {}}
         onSave={async (v) => {
           const patch = fromVals(v, profileFields);
-          if (!patch.name) return "Give the profile a name";
-          if (!patch.crop) patch.crop = "Lettuce";
+          if (!patch["name"]) return "Give the profile a name";
+          if (!patch["crop"]) patch["crop"] = "Lettuce";
           if (editProfile === "new") {
             const { error } = await supabase.from("crop_profiles").insert(patch as never);
             if (error) return error.message;
@@ -213,6 +213,7 @@ function BatchesPage() {
           }
           toast.success("Profile saved");
           refresh();
+          return null;
         }}
       />
     </div>

@@ -164,11 +164,11 @@ function InventoryPage() {
         initial={dlg?.item ? toVals(dlg.item, itemFields) : { name: "", category: "Nutrients", unit: "kg", quantity: "0", reorder_level: "0" }}
         onSave={async (v) => {
           const p = fromVals(v, itemFields);
-          if (!p.name) return "Item name required";
-          const row = { name: String(p.name).slice(0, 100), category: (p.category as string) || "Other", unit: (p.unit as string) || "units", quantity: (p.quantity as number) ?? 0, reorder_level: (p.reorder_level as number) ?? 0 };
+          if (!p["name"]) return "Item name required";
+          const row = { name: String(p["name"]).slice(0, 100), category: (p["category"] as string) || "Other", unit: (p["unit"] as string) || "units", quantity: (p["quantity"] as number) ?? 0, reorder_level: (p["reorder_level"] as number) ?? 0 };
           if (dlg?.kind === "edit" && dlg.item) { const e = await updateRow("inventory_items", dlg.item.id, row); if (e) return e; }
           else { const { error } = await supabase.from("inventory_items").insert(row); if (error) return error.message; }
-          toast.success("Item saved"); refresh();
+          toast.success("Item saved"); refresh(); return null;
         }}
       />
       <FieldsDialog
@@ -177,15 +177,15 @@ function InventoryPage() {
         extra={<p className="text-xs text-muted-foreground">Adds to stock and records the cost as an expense in Income & expenses.</p>}
         onSave={async (v) => {
           const p = fromVals(v, buyFields);
-          if (!p.item_id) return "Choose an item";
-          if (!p.qty || (p.qty as number) <= 0) return "Enter the quantity bought";
-          if (p.cost === null || (p.cost as number) < 0) return "Enter the total cost";
+          if (!p["item_id"]) return "Choose an item";
+          if (!p["qty"] || (p["qty"] as number) <= 0) return "Enter the quantity bought";
+          if (p["cost"] === null || (p["cost"] as number) < 0) return "Enter the total cost";
           const { error } = await supabase.rpc("record_purchase", {
-            _item_id: p.item_id as string, _qty: p.qty as number, _cost: p.cost as number,
-            _vendor: (p.vendor as string) ?? "", _date: (p.date as string) ?? toDateKey(new Date()), _notes: (p.notes as string) ?? "",
+            _item_id: p["item_id"] as string, _qty: p["qty"] as number, _cost: p["cost"] as number,
+            _vendor: (p["vendor"] as string) ?? "", _date: (p["date"] as string) ?? toDateKey(new Date()), _notes: (p["notes"] as string) ?? "",
           });
           if (error) return error.message;
-          toast.success("Purchase saved to stock and expenses"); refresh();
+          toast.success("Purchase saved to stock and expenses"); refresh(); return null;
         }}
       />
       <FieldsDialog
@@ -193,15 +193,15 @@ function InventoryPage() {
         initial={{ item_id: dlg?.item?.id ?? "", qty: "", dir: "use", reason: "" }}
         onSave={async (v) => {
           const p = fromVals(v, useFields);
-          const n = p.qty as number;
-          if (!p.item_id) return "Choose an item";
+          const n = p["qty"] as number;
+          if (!p["item_id"]) return "Choose an item";
           if (!n || n <= 0) return "Enter an amount";
-          const label = p.dir === "add" ? "Correction" : p.dir === "waste" ? "Wasted" : "Used";
+          const label = p["dir"] === "add" ? "Correction" : p["dir"] === "waste" ? "Wasted" : "Used";
           const { error } = await supabase.from("inventory_movements").insert({
-            item_id: p.item_id as string, change: p.dir === "add" ? n : -n, reason: `${label}${p.reason ? ` — ${String(p.reason).slice(0, 150)}` : ""}`,
+            item_id: p["item_id"] as string, change: p["dir"] === "add" ? n : -n, reason: `${label}${p["reason"] ? ` — ${String(p["reason"]).slice(0, 150)}` : ""}`,
           });
           if (error) return error.message;
-          toast.success("Stock updated"); refresh();
+          toast.success("Stock updated"); refresh(); return null;
         }}
       />
     </div>

@@ -161,10 +161,10 @@ function FinancePage() {
         open={!!edit} onOpenChange={(o) => !o && setEdit(null)} title="Edit entry" fields={editFields}
         initial={edit ? toVals(edit, editFields) : {}}
         onSave={async (v) => {
-          if (!edit) return;
+          if (!edit) return null;
           const p = fromVals(v, editFields);
-          if (!p.amount || (p.amount as number) <= 0) return "Enter an amount";
-          if (!p.category) p.category = "Other";
+          if (!p["amount"] || (p["amount"] as number) <= 0) return "Enter an amount";
+          if (!p["category"]) p["category"] = "Other";
           const e = await updateRow("transactions", edit.id, p);
           if (!e) { toast.success("Entry updated"); refresh(); }
           return e;
