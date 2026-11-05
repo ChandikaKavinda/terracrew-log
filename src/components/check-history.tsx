@@ -15,7 +15,7 @@ export function CheckHistory() {
   const navigate = useNavigate();
   const { data: rows = [] } = useQuery({
     queryKey: ["daily_checks", "history"],
-    queryFn: async () => ((await supabase.from("daily_checks").select("*, batches(code)").order("check_date", { ascending: false }).order("check_time", { ascending: false }).limit(30)).data ?? []) as unknown as Row[],
+    queryFn: async () => ((await supabase.from("daily_checks").select("*, batches:batches!daily_checks_batch_id_fkey(code)").order("check_date", { ascending: false }).order("check_time", { ascending: false }).limit(30)).data ?? []) as unknown as Row[],
   });
 
   return (
