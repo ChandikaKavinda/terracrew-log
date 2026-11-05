@@ -160,6 +160,7 @@ function CheckPage() {
   };
 
   return (
+    <div className="space-y-5">
     <form onSubmit={submit} className="space-y-5">
       <PageHeader title="Daily checklist" sub="Fill once per day. Readings feed the dashboard charts." />
 
@@ -291,7 +292,8 @@ function CheckPage() {
       <div className="sticky bottom-4 flex justify-end">
         <Button size="lg" disabled={busy} className="shadow-lg">{busy ? "Saving…" : "Submit checklist"}</Button>
       </div>
-      <CheckHistory />
     </form>
+    <CheckHistory />
+    </div>
   );
 }
