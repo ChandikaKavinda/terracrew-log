@@ -4,7 +4,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
-import { useBatches } from "@/lib/use-me";
+import { useBatches, useMe } from "@/lib/use-me";
+import { useProfiles, targetsOf } from "@/lib/crop-profiles";
+import { deleteRow, updateRow } from "@/lib/db-actions";
+import { FieldsDialog, DeleteButton, EditButton, toVals, fromVals, type Field } from "@/components/edit-dialog";
 import { PageHeader, Section, num } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +30,20 @@ function HarvestPage() {
   });
   const empty = { batch_id: "", harvested_on: toDateKey(new Date()), plants_harvested: "", total_weight_kg: "", avg_leaf_count: "", grade_a: "", grade_b: "", grade_c: "", rejected: "", notes: "" };
   const [f, setF] = useState(empty);
+  const { data: me } = useMe();
+  const { data: profiles = [] } = useProfiles();
+  const [edit, setEdit] = useState<(typeof rows)[number] | null>(null);
+  const prof = profiles.find((p) => p.id === batches.find((b) => b.id === f.batch_id)?.profile_id);
+  const t = targetsOf(prof);
+  const fields: Field[] = [
+    { key: "batch_id", label: "Batch", type: "select", options: batches.map((b) => ({ value: b.id, label: b.code })) },
+    { key: "harvested_on", label: "Date", type: "date" },
+    { key: "plants_harvested", label: "Plants harvested", type: "number" }, { key: "total_weight_kg", label: "Total weight (kg)", type: "number" },
+    { key: "avg_leaf_count", label: "Avg leaves / plant", type: "number" },
+    { key: "grade_a", label: "Grade A", type: "number" }, { key: "grade_b", label: "Grade B", type: "number" },
+    { key: "grade_c", label: "Grade C", type: "number" }, { key: "rejected", label: "Rejected", type: "number" },
+    { key: "notes", label: "Notes", full: true },
+  ];
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
 
   async function save(e: React.FormEvent) {
@@ -49,7 +66,7 @@ function HarvestPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Harvest & grading" sub="Grade A: ≥150 g & ≥12 leaves, firm, no defects · B: 100–150 g or minor blemish · C: under 100 g or visible defects (adjust to your market)." />
+      <PageHeader title="Harvest & grading" sub={`${prof ? prof.name : "Default"} grades — A: ≥${t.grade_a_min_g} g & ≥${t.grade_a_min_leaves} leaves · B: ≥${t.grade_b_min_g} g${t.grade_b_min_leaves ? ` & ≥${t.grade_b_min_leaves} leaves` : ""} · C: below B. Pick a batch to see its profile.`} />
       <Section title="Record a harvest">
         <form onSubmit={save} className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <div>
@@ -95,7 +112,7 @@ function HarvestPage() {
       <Section title="Harvest history">
         <Table>
           <TableHeader>
-            <TableRow><TableHead>Date</TableHead><TableHead>Batch</TableHead><TableHead>Plants</TableHead><TableHead>Weight</TableHead><TableHead>Avg g/plant</TableHead><TableHead>Avg leaves</TableHead><TableHead>A / B / C / Rej</TableHead><TableHead>% Grade A</TableHead></TableRow>
+            <TableRow><TableHead>Date</TableHead><TableHead>Batch</TableHead><TableHead>Plants</TableHead><TableHead>Weight</TableHead><TableHead>Avg g/plant</TableHead><TableHead>Avg leaves</TableHead><TableHead>A / B / C / Rej</TableHead><TableHead>% Grade A</TableHead><TableHead /></TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((r) => (
@@ -108,12 +125,28 @@ function HarvestPage() {
                 <TableCell>{r.avg_leaf_count ?? "—"}</TableCell>
                 <TableCell>{r.grade_a} / {r.grade_b} / {r.grade_c} / {r.rejected}</TableCell>
                 <TableCell>{r.plants_harvested ? Math.round((r.grade_a / r.plants_harvested) * 100) + "%" : "—"}</TableCell>
+                <TableCell className="whitespace-nowrap text-right">
+                  <EditButton onClick={() => setEdit(r)} />
+                  <DeleteButton what="this harvest record" disabled={!me?.isOwner} onConfirm={async () => { const e = await deleteRow("harvests", r.id); qc.invalidateQueries({ queryKey: ["harvests"] }); return e; }} />
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
         {!rows.length && <p className="py-4 text-sm text-muted-foreground">No harvests yet.</p>}
       </Section>
+      <FieldsDialog
+        open={!!edit} onOpenChange={(o) => !o && setEdit(null)} title="Edit harvest" fields={fields}
+        initial={edit ? toVals(edit, fields) : {}}
+        onSave={async (v) => {
+          if (!edit) return;
+          const patch = fromVals(v, fields);
+          for (const k of ["plants_harvested", "total_weight_kg", "grade_a", "grade_b", "grade_c", "rejected"]) patch[k] = patch[k] ?? 0;
+          const e = await updateRow("harvests", edit.id, patch);
+          if (!e) { toast.success("Harvest updated"); qc.invalidateQueries({ queryKey: ["harvests"] }); }
+          return e;
+        }}
+      />
     </div>
   );
 }
