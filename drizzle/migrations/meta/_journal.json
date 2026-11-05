@@ -15,6 +15,13 @@
       "when": 1793844373028,
       "tag": "0001_crop_profiles_and_edits",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793858468298,
+      "tag": "0002_profiles_grading_zones_defects",
+      "breakpoints": true
     }
   ]
 }

@@ -86,12 +86,16 @@ export type Database = {
           created_at: string
           created_by: string | null
           crop: string
+          defect_tags: string[]
           ec_max: number | null
           ec_min: number | null
+          grade_a_min_brix: number | null
           grade_a_min_g: number | null
           grade_a_min_leaves: number | null
+          grade_b_min_brix: number | null
           grade_b_min_g: number | null
           grade_b_min_leaves: number | null
+          grade_metric: string
           humidity_max: number | null
           humidity_min: number | null
           id: string
@@ -109,12 +113,16 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           crop?: string
+          defect_tags?: string[]
           ec_max?: number | null
           ec_min?: number | null
+          grade_a_min_brix?: number | null
           grade_a_min_g?: number | null
           grade_a_min_leaves?: number | null
+          grade_b_min_brix?: number | null
           grade_b_min_g?: number | null
           grade_b_min_leaves?: number | null
+          grade_metric?: string
           humidity_max?: number | null
           humidity_min?: number | null
           id?: string
@@ -132,12 +140,16 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           crop?: string
+          defect_tags?: string[]
           ec_max?: number | null
           ec_min?: number | null
+          grade_a_min_brix?: number | null
           grade_a_min_g?: number | null
           grade_a_min_leaves?: number | null
+          grade_b_min_brix?: number | null
           grade_b_min_g?: number | null
           grade_b_min_leaves?: number | null
+          grade_metric?: string
           humidity_max?: number | null
           humidity_min?: number | null
           id?: string
@@ -161,6 +173,7 @@ export type Database = {
           created_at: string
           ec: number | null
           flow_ok: boolean
+          germinated_count: number | null
           germination_issues: string[]
           germination_notes: string | null
           gh_defects: boolean
@@ -172,6 +185,7 @@ export type Database = {
           leaks: boolean
           leaks_notes: string | null
           notes: string | null
+          nursery_batch_id: string | null
           ph: number | null
           ppe_worn: boolean
           tank_debris: boolean
@@ -189,6 +203,7 @@ export type Database = {
           created_at?: string
           ec?: number | null
           flow_ok?: boolean
+          germinated_count?: number | null
           germination_issues?: string[]
           germination_notes?: string | null
           gh_defects?: boolean
@@ -200,6 +215,7 @@ export type Database = {
           leaks?: boolean
           leaks_notes?: string | null
           notes?: string | null
+          nursery_batch_id?: string | null
           ph?: number | null
           ppe_worn?: boolean
           tank_debris?: boolean
@@ -217,6 +233,7 @@ export type Database = {
           created_at?: string
           ec?: number | null
           flow_ok?: boolean
+          germinated_count?: number | null
           germination_issues?: string[]
           germination_notes?: string | null
           gh_defects?: boolean
@@ -228,6 +245,7 @@ export type Database = {
           leaks?: boolean
           leaks_notes?: string | null
           notes?: string | null
+          nursery_batch_id?: string | null
           ph?: number | null
           ppe_worn?: boolean
           tank_debris?: boolean
@@ -240,6 +258,13 @@ export type Database = {
           {
             foreignKeyName: "daily_checks_batch_id_fkey"
             columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_checks_nursery_batch_id_fkey"
+            columns: ["nursery_batch_id"]
             isOneToOne: false
             referencedRelation: "batches"
             referencedColumns: ["id"]
@@ -257,6 +282,7 @@ export type Database = {
           measured_on: string
           plant_no: number
           variety: string | null
+          zone: string | null
         }
         Insert: {
           batch_id: string
@@ -268,6 +294,7 @@ export type Database = {
           measured_on?: string
           plant_no: number
           variety?: string | null
+          zone?: string | null
         }
         Update: {
           batch_id?: string
@@ -279,6 +306,7 @@ export type Database = {
           measured_on?: string
           plant_no?: number
           variety?: string | null
+          zone?: string | null
         }
         Relationships: [
           {
@@ -299,6 +327,7 @@ export type Database = {
       }
       harvests: {
         Row: {
+          avg_brix: number | null
           avg_leaf_count: number | null
           batch_id: string
           created_at: string
@@ -314,6 +343,7 @@ export type Database = {
           total_weight_kg: number
         }
         Insert: {
+          avg_brix?: number | null
           avg_leaf_count?: number | null
           batch_id: string
           created_at?: string
@@ -329,6 +359,7 @@ export type Database = {
           total_weight_kg?: number
         }
         Update: {
+          avg_brix?: number | null
           avg_leaf_count?: number | null
           batch_id?: string
           created_at?: string
@@ -468,6 +499,7 @@ export type Database = {
           batch_id: string | null
           check_id: string | null
           created_at: string
+          defect_counts: Json
           disease: number
           healthy: number
           id: string
@@ -484,6 +516,7 @@ export type Database = {
           batch_id?: string | null
           check_id?: string | null
           created_at?: string
+          defect_counts?: Json
           disease?: number
           healthy?: number
           id?: string
@@ -500,6 +533,7 @@ export type Database = {
           batch_id?: string | null
           check_id?: string | null
           created_at?: string
+          defect_counts?: Json
           disease?: number
           healthy?: number
           id?: string
