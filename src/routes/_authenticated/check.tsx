@@ -1,6 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useProfiles, targetsOf, inRange, GERMINATION_ISSUES } from "@/lib/crop-profiles";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { CheckHistory } from "@/components/check-history";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBatches } from "@/lib/use-me";
@@ -55,7 +59,30 @@ function CheckPage() {
     flow_ok: true,
     notes: "",
   });
-  const [growth, setGrowth] = useState(Array.from({ length: 10 }, () => ({ h: "", l: "" })));
+  const [growth, setGrowth] = useState(Array.from({ length: 10 }, () => ({ h: "", l: "", v: "" })));
+  const [prev, setPrev] = useState<({ h: number | null; l: number | null; date: string } | null)[]>([]);
+  const [issues, setIssues] = useState<string[]>([]);
+  const { data: profiles = [] } = useProfiles();
+  const selBatch = batches.find((b) => b.id === f.batch_id);
+  const t = targetsOf(profiles.find((p) => p.id === selBatch?.profile_id));
+  const { data: lastGrowth } = useQuery({
+    queryKey: ["growth-prev", f.batch_id, f.check_date],
+    enabled: !!f.batch_id,
+    queryFn: async () => {
+      const { data } = await supabase.from("growth_measurements").select("*").eq("batch_id", f.batch_id).lt("measured_on", f.check_date).order("measured_on", { ascending: false }).limit(100);
+      return data ?? [];
+    },
+  });
+  useEffect(() => {
+    if (!f.batch_id) return;
+    const rows = lastGrowth ?? [];
+    const p = Array.from({ length: 10 }, (_, i) => {
+      const r = rows.find((x) => x.plant_no === i + 1);
+      return r ? { h: r.height_cm, l: r.leaf_count, date: r.measured_on, v: r.variety } : null;
+    });
+    setPrev(p);
+    setGrowth(p.map((x) => ({ h: x?.h != null ? String(x.h) : "", l: x?.l != null ? String(x.l) : "", v: x?.v ?? selBatch?.variety ?? "" })));
+  }, [lastGrowth, f.batch_id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [q, setQ] = useState({ macro: "0", micro: "0", insect: "0", disease: "0", tipburn: "0", other: "0", notes: "" });
   const [germ, setGerm] = useState({ batch_id: "", germinated: "", notes: "" });
   const [busy, setBusy] = useState(false);
@@ -83,6 +110,7 @@ function CheckPage() {
           leaks: f.leaks, leaks_notes: f.leaks_notes || null,
           flow_ok: f.flow_ok,
           germination_notes: germ.notes || null,
+          germination_issues: issues,
           notes: f.notes || null,
         })
         .select()
@@ -91,7 +119,7 @@ function CheckPage() {
 
       if (f.batch_id) {
         const rows = growth
-          .map((g, i) => ({ batch_id: f.batch_id, check_id: check.id, plant_no: i + 1, measured_on: f.check_date, height_cm: num(g.h), leaf_count: g.l ? Math.round(Number(g.l)) : null }))
+          .map((g, i) => ({ batch_id: f.batch_id, check_id: check.id, plant_no: i + 1, variety: g.v || null, measured_on: f.check_date, height_cm: num(g.h), leaf_count: g.l ? Math.round(Number(g.l)) : null }))
           .filter((r) => r.height_cm !== null || r.leaf_count !== null);
         if (rows.length) {
           const { error: ge } = await supabase.from("growth_measurements").upsert(rows, { onConflict: "batch_id,plant_no,measured_on" });
@@ -120,15 +148,19 @@ function CheckPage() {
     }
   }
 
-  const reading = (k: "ec" | "ph" | "water_temp" | "air_temp" | "humidity", label: string, hint: string) => (
-    <div>
-      <Label>{label}</Label>
-      <Input type="number" step="0.01" inputMode="decimal" value={f[k]} onChange={(e) => up(k, e.target.value)} />
-      <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
-    </div>
-  );
+  const reading = (k: "ec" | "ph" | "water_temp" | "air_temp" | "humidity", label: string, min: number, max: number) => {
+    const ok = inRange(num(f[k]), min, max);
+    return (
+      <div>
+        <Label>{label}</Label>
+        <Input type="number" step="0.01" inputMode="decimal" value={f[k]} onChange={(e) => up(k, e.target.value)} className={ok === false ? "border-destructive" : ""} />
+        <p className={`mt-1 text-xs ${ok === false ? "text-destructive" : "text-muted-foreground"}`}>Target {min}–{max}{ok === false ? " · out of range" : ""}</p>
+      </div>
+    );
+  };
 
   return (
+    <div className="space-y-5">
     <form onSubmit={submit} className="space-y-5">
       <PageHeader title="Daily checklist" sub="Fill once per day. Readings feed the dashboard charts." />
 
@@ -175,13 +207,13 @@ function CheckPage() {
         </div>
       </Section>
 
-      <Section title="Readings">
+      <Section title="Readings" desc={selBatch ? `Targets from ${profiles.find((p) => p.id === selBatch.profile_id)?.name ?? "default lettuce"} profile.` : "Default lettuce targets. Choose a batch to use its crop profile."}>
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          {reading("ec", "EC (mS/cm)", "Lettuce: 0.8–1.2")}
-          {reading("ph", "pH", "Lettuce: 5.5–6.5")}
-          {reading("water_temp", "Water temp (°C)", "Ideal 18–24")}
-          {reading("air_temp", "Greenhouse temp (°C)", "Ideal 18–28")}
-          {reading("humidity", "Humidity (%)", "Ideal 50–70")}
+          {reading("ec", "EC (mS/cm)", t.ec_min, t.ec_max)}
+          {reading("ph", "pH", t.ph_min, t.ph_max)}
+          {reading("water_temp", "Water temp (°C)", t.water_temp_min, t.water_temp_max)}
+          {reading("air_temp", "Greenhouse temp (°C)", t.air_temp_min, t.air_temp_max)}
+          {reading("humidity", "Humidity (%)", t.humidity_min, t.humidity_max)}
         </div>
       </Section>
 
@@ -201,15 +233,23 @@ function CheckPage() {
         </div>
       </Section>
 
-      <Section title="Growth — 10 fixed sample plants" desc={f.batch_id ? "Measure the same 10 tagged plants every day." : "Choose a growing batch above to record growth."}>
+      <Section title="Growth — 10 fixed sample plants" desc={f.batch_id ? "Yesterday's values are filled in — just change what grew." : "Choose a growing batch above to record growth."}>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {growth.map((g, i) => (
-            <div key={i} className="rounded-lg border p-2">
-              <div className="mb-1 text-xs font-semibold text-muted-foreground">Plant #{i + 1}</div>
-              <Input disabled={!f.batch_id} placeholder="Height cm" type="number" step="0.1" value={g.h} onChange={(e) => setGrowth((s) => s.map((x, j) => (j === i ? { ...x, h: e.target.value } : x)))} />
-              <Input disabled={!f.batch_id} className="mt-1" placeholder="Leaves" type="number" value={g.l} onChange={(e) => setGrowth((s) => s.map((x, j) => (j === i ? { ...x, l: e.target.value } : x)))} />
-            </div>
-          ))}
+          {growth.map((g, i) => {
+            const set = (k: "h" | "l" | "v", val: string) => setGrowth((s) => s.map((x, j) => (j === i ? { ...x, [k]: val } : x)));
+            const p = prev[i];
+            return (
+              <div key={i} className="rounded-lg border p-2">
+                <div className="mb-1 flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                  <span>Plant #{i + 1}</span>
+                </div>
+                <Input disabled={!f.batch_id} className="mb-1 h-8 text-xs" placeholder="Variety" value={g.v} onChange={(e) => set("v", e.target.value)} />
+                <Input disabled={!f.batch_id} placeholder="Height cm" type="number" step="0.1" value={g.h} onChange={(e) => set("h", e.target.value)} />
+                <Input disabled={!f.batch_id} className="mt-1" placeholder="Leaves" type="number" value={g.l} onChange={(e) => set("l", e.target.value)} />
+                {p && <Badge variant="secondary" className="mt-1 w-full justify-center text-[10px] font-normal">Prev {p.h ?? "–"} cm · {p.l ?? "–"} lv</Badge>}
+              </div>
+            );
+          })}
         </div>
       </Section>
 
@@ -233,8 +273,16 @@ function CheckPage() {
             <SelectContent>{nursery.map((b) => <SelectItem key={b.id} value={b.id}>{b.code} · {b.seeds_sown ?? "?"} seeds</SelectItem>)}</SelectContent>
           </Select>
           <Input type="number" placeholder="Seeds germinated so far" value={germ.germinated} onChange={(e) => setGerm({ ...germ, germinated: e.target.value })} />
-          <Input placeholder="Nursery notes" value={germ.notes} onChange={(e) => setGerm({ ...germ, notes: e.target.value })} />
         </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {GERMINATION_ISSUES.map((g) => (
+            <label key={g} className="flex cursor-pointer items-center gap-2 rounded-lg border p-2 text-sm">
+              <Checkbox checked={issues.includes(g)} onCheckedChange={(c) => setIssues((s) => (c ? [...s, g] : s.filter((x) => x !== g)))} />
+              {g}
+            </label>
+          ))}
+        </div>
+        <Input className="mt-3" placeholder="Other nursery observations (optional)" value={germ.notes} onChange={(e) => setGerm({ ...germ, notes: e.target.value })} />
       </Section>
 
       <Section title="Other notes">
@@ -245,5 +293,7 @@ function CheckPage() {
         <Button size="lg" disabled={busy} className="shadow-lg">{busy ? "Saving…" : "Submit checklist"}</Button>
       </div>
     </form>
+    <CheckHistory />
+    </div>
   );
 }

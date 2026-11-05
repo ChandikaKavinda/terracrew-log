@@ -5,10 +5,13 @@ import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe, LKR } from "@/lib/use-me";
+import { deleteRow, updateRow } from "@/lib/db-actions";
 import { PageHeader, Section } from "@/components/page-header";
+import { FieldsDialog, DeleteButton, EditButton, toVals, fromVals, type Field } from "@/components/edit-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toDateKey } from "@/lib/reminders";
@@ -18,7 +21,10 @@ export const Route = createFileRoute("/_authenticated/finance")({
   component: FinancePage,
 });
 
-const cats = { income: ["Lettuce sales", "Other produce", "Other"], expense: ["Nutrients", "Seeds", "Electricity", "Water", "Labour", "Packaging", "Transport", "Repairs", "Other"] };
+const cats = {
+  income: ["Lettuce sales", "Other produce", "Other"],
+  expense: ["Nutrients", "Seeds", "Substrates", "Chemicals", "Packaging", "Equipment", "Spares", "Electricity", "Water", "Labour", "Transport", "Repairs", "Other"],
+};
 
 function FinancePage() {
   const { data: me } = useMe();
@@ -28,7 +34,9 @@ function FinancePage() {
     enabled: !!me?.isOwner,
     queryFn: async () => (await supabase.from("transactions").select("*").order("tx_date", { ascending: false })).data ?? [],
   });
-  const [f, setF] = useState({ kind: "income" as "income" | "expense", category: "Lettuce sales", amount: "", tx_date: toDateKey(new Date()), description: "" });
+  const blank = () => ({ kind: "income" as "income" | "expense", category: "Lettuce sales", amount: "", tx_date: toDateKey(new Date()), description: "", counterparty: "", handled_by: me?.name ?? "" });
+  const [f, setF] = useState(blank);
+  const [edit, setEdit] = useState<(typeof tx)[number] | null>(null);
 
   const monthly = useMemo(() => {
     const m = new Map<string, { month: string; Income: number; Expenses: number }>();
@@ -41,21 +49,36 @@ function FinancePage() {
     return [...m.values()];
   }, [tx]);
 
-  if (me && !me.isOwner) return <p className="text-muted-foreground">Only the owner can view income and expenses.</p>;
+  if (me && !me.isOwner) return <p className="text-muted-foreground">Only the owner can view income and expenses. Stock purchases you log in Inventory are added here automatically.</p>;
+
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["transactions"] }); qc.invalidateQueries({ queryKey: ["fin-summary"] }); };
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const amount = Number(f.amount);
     if (!amount || amount <= 0) { toast.error("Enter an amount"); return; }
-    const { error } = await supabase.from("transactions").insert({ ...f, amount, description: f.description.slice(0, 300) || null });
+    const { error } = await supabase.from("transactions").insert({
+      kind: f.kind, category: f.category, amount, tx_date: f.tx_date,
+      description: f.description.slice(0, 300) || null, counterparty: f.counterparty.slice(0, 120) || null, handled_by: f.handled_by.slice(0, 120) || null,
+    });
     if (error) { toast.error(error.message); return; }
-    setF({ ...f, amount: "", description: "" });
-    qc.invalidateQueries({ queryKey: ["transactions"] });
-    qc.invalidateQueries({ queryKey: ["fin-summary"] });
+    setF({ ...f, amount: "", description: "", counterparty: "" });
+    refresh();
   }
 
   const inc = tx.filter((t) => t.kind === "income").reduce((a, t) => a + Number(t.amount), 0);
   const exp = tx.filter((t) => t.kind === "expense").reduce((a, t) => a + Number(t.amount), 0);
+  const isInc = f.kind === "income";
+
+  const editKind = (edit?.kind ?? "income") as "income" | "expense";
+  const editFields: Field[] = [
+    { key: "kind", label: "Type", type: "select", options: [{ value: "income", label: "Income" }, { value: "expense", label: "Expense" }] },
+    { key: "category", label: "Category", type: "select", options: [...new Set([...cats[editKind], edit?.category ?? "Other"])].map((c) => ({ value: c, label: c })) },
+    { key: "amount", label: "Amount (Rs)", type: "number" }, { key: "tx_date", label: "Date", type: "date" },
+    { key: "counterparty", label: editKind === "income" ? "Sold to (buyer)" : "Purchased from (supplier)" },
+    { key: "handled_by", label: editKind === "income" ? "Sold by" : "Purchased by" },
+    { key: "description", label: "Note", full: true },
+  ];
 
   return (
     <div className="space-y-6">
@@ -69,12 +92,12 @@ function FinancePage() {
         ))}
       </div>
       <Section title="Add entry">
-        <form onSubmit={save} className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <form onSubmit={save} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <Label>Type</Label>
             <Select value={f.kind} onValueChange={(v) => setF({ ...f, kind: v as "income" | "expense", category: cats[v as "income" | "expense"][0] ?? "Other" })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="income">Income</SelectItem><SelectItem value="expense">Expense</SelectItem></SelectContent>
+              <SelectContent><SelectItem value="income">Income (sale)</SelectItem><SelectItem value="expense">Expense (purchase)</SelectItem></SelectContent>
             </Select>
           </div>
           <div>
@@ -86,6 +109,8 @@ function FinancePage() {
           </div>
           <div><Label>Amount (Rs)</Label><Input type="number" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></div>
           <div><Label>Date</Label><Input type="date" value={f.tx_date} onChange={(e) => setF({ ...f, tx_date: e.target.value })} /></div>
+          <div><Label>{isInc ? "Sold to (buyer)" : "Purchased from (supplier)"}</Label><Input value={f.counterparty} onChange={(e) => setF({ ...f, counterparty: e.target.value })} placeholder={isInc ? "Keells, hotel, market…" : "Agro shop name"} /></div>
+          <div><Label>{isInc ? "Sold by" : "Purchased by"}</Label><Input value={f.handled_by} onChange={(e) => setF({ ...f, handled_by: e.target.value })} placeholder={me?.name} /></div>
           <div><Label>Note</Label><Input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
           <div className="flex items-end"><Button className="w-full">Add</Button></div>
         </form>
@@ -108,21 +133,43 @@ function FinancePage() {
         </Section>
       )}
       <Section title="Entries">
-        <Table>
-          <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Category</TableHead><TableHead>Note</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {tx.map((t) => (
-              <TableRow key={t.id}>
-                <TableCell>{t.tx_date}</TableCell>
-                <TableCell className="capitalize">{t.kind}</TableCell>
-                <TableCell>{t.category}</TableCell>
-                <TableCell>{t.description}</TableCell>
-                <TableCell className={`text-right font-medium ${t.kind === "expense" ? "text-destructive" : "text-success"}`}>{t.kind === "expense" ? "−" : "+"}{LKR(Number(t.amount))}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Category</TableHead><TableHead>From / to</TableHead><TableHead>By</TableHead><TableHead>Note</TableHead><TableHead className="text-right">Amount</TableHead><TableHead /></TableRow></TableHeader>
+            <TableBody>
+              {tx.map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell className="whitespace-nowrap">{t.tx_date}</TableCell>
+                  <TableCell><Badge variant={t.kind === "income" ? "default" : "secondary"} className="capitalize">{t.kind}</Badge></TableCell>
+                  <TableCell>{t.category}</TableCell>
+                  <TableCell>{t.counterparty ? `${t.kind === "income" ? "To" : "From"} ${t.counterparty}` : "—"}</TableCell>
+                  <TableCell>{t.handled_by ?? "—"}</TableCell>
+                  <TableCell className="max-w-56 text-xs">{t.description}</TableCell>
+                  <TableCell className={`whitespace-nowrap text-right font-medium ${t.kind === "expense" ? "text-destructive" : "text-success"}`}>{t.kind === "expense" ? "−" : "+"}{LKR(Number(t.amount))}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right">
+                    <EditButton onClick={() => setEdit(t)} />
+                    <DeleteButton what="this entry" onConfirm={async () => { const e = await deleteRow("transactions", t.id); refresh(); return e; }} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        {!tx.length && <p className="py-4 text-sm text-muted-foreground">No entries yet.</p>}
       </Section>
+      <FieldsDialog
+        open={!!edit} onOpenChange={(o) => !o && setEdit(null)} title="Edit entry" fields={editFields}
+        initial={edit ? toVals(edit, editFields) : {}}
+        onSave={async (v) => {
+          if (!edit) return null;
+          const p = fromVals(v, editFields);
+          if (!p["amount"] || (p["amount"] as number) <= 0) return "Enter an amount";
+          if (!p["category"]) p["category"] = "Other";
+          const e = await updateRow("transactions", edit.id, p);
+          if (!e) { toast.success("Entry updated"); refresh(); }
+          return e;
+        }}
+      />
     </div>
   );
 }
