@@ -26,6 +26,7 @@ export type Database = {
           id: string
           notes: string | null
           plant_count: number | null
+          profile_id: string | null
           seeded_on: string
           seeds_sown: number | null
           status: string
@@ -43,6 +44,7 @@ export type Database = {
           id?: string
           notes?: string | null
           plant_count?: number | null
+          profile_id?: string | null
           seeded_on?: string
           seeds_sown?: number | null
           status?: string
@@ -60,11 +62,92 @@ export type Database = {
           id?: string
           notes?: string | null
           plant_count?: number | null
+          profile_id?: string | null
           seeded_on?: string
           seeds_sown?: number | null
           status?: string
           transplanted_on?: string | null
           variety?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batches_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "crop_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crop_profiles: {
+        Row: {
+          air_temp_max: number | null
+          air_temp_min: number | null
+          created_at: string
+          created_by: string | null
+          crop: string
+          ec_max: number | null
+          ec_min: number | null
+          grade_a_min_g: number | null
+          grade_a_min_leaves: number | null
+          grade_b_min_g: number | null
+          grade_b_min_leaves: number | null
+          humidity_max: number | null
+          humidity_min: number | null
+          id: string
+          name: string
+          notes: string | null
+          ph_max: number | null
+          ph_min: number | null
+          season: string | null
+          water_temp_max: number | null
+          water_temp_min: number | null
+        }
+        Insert: {
+          air_temp_max?: number | null
+          air_temp_min?: number | null
+          created_at?: string
+          created_by?: string | null
+          crop?: string
+          ec_max?: number | null
+          ec_min?: number | null
+          grade_a_min_g?: number | null
+          grade_a_min_leaves?: number | null
+          grade_b_min_g?: number | null
+          grade_b_min_leaves?: number | null
+          humidity_max?: number | null
+          humidity_min?: number | null
+          id?: string
+          name: string
+          notes?: string | null
+          ph_max?: number | null
+          ph_min?: number | null
+          season?: string | null
+          water_temp_max?: number | null
+          water_temp_min?: number | null
+        }
+        Update: {
+          air_temp_max?: number | null
+          air_temp_min?: number | null
+          created_at?: string
+          created_by?: string | null
+          crop?: string
+          ec_max?: number | null
+          ec_min?: number | null
+          grade_a_min_g?: number | null
+          grade_a_min_leaves?: number | null
+          grade_b_min_g?: number | null
+          grade_b_min_leaves?: number | null
+          humidity_max?: number | null
+          humidity_min?: number | null
+          id?: string
+          name?: string
+          notes?: string | null
+          ph_max?: number | null
+          ph_min?: number | null
+          season?: string | null
+          water_temp_max?: number | null
+          water_temp_min?: number | null
         }
         Relationships: []
       }
@@ -78,6 +161,7 @@ export type Database = {
           created_at: string
           ec: number | null
           flow_ok: boolean
+          germination_issues: string[]
           germination_notes: string | null
           gh_defects: boolean
           gh_defects_notes: string | null
@@ -105,6 +189,7 @@ export type Database = {
           created_at?: string
           ec?: number | null
           flow_ok?: boolean
+          germination_issues?: string[]
           germination_notes?: string | null
           gh_defects?: boolean
           gh_defects_notes?: string | null
@@ -132,6 +217,7 @@ export type Database = {
           created_at?: string
           ec?: number | null
           flow_ok?: boolean
+          germination_issues?: string[]
           germination_notes?: string | null
           gh_defects?: boolean
           gh_defects_notes?: string | null
@@ -170,6 +256,7 @@ export type Database = {
           leaf_count: number | null
           measured_on: string
           plant_no: number
+          variety: string | null
         }
         Insert: {
           batch_id: string
@@ -180,6 +267,7 @@ export type Database = {
           leaf_count?: number | null
           measured_on?: string
           plant_no: number
+          variety?: string | null
         }
         Update: {
           batch_id?: string
@@ -190,6 +278,7 @@ export type Database = {
           leaf_count?: number | null
           measured_on?: string
           plant_no?: number
+          variety?: string | null
         }
         Relationships: [
           {
@@ -445,9 +534,12 @@ export type Database = {
           amount: number
           batch_id: string | null
           category: string
+          counterparty: string | null
           created_at: string
           description: string | null
+          handled_by: string | null
           id: string
+          inventory_item_id: string | null
           kind: string
           tx_date: string
           user_id: string | null
@@ -456,9 +548,12 @@ export type Database = {
           amount: number
           batch_id?: string | null
           category: string
+          counterparty?: string | null
           created_at?: string
           description?: string | null
+          handled_by?: string | null
           id?: string
+          inventory_item_id?: string | null
           kind: string
           tx_date?: string
           user_id?: string | null
@@ -467,9 +562,12 @@ export type Database = {
           amount?: number
           batch_id?: string | null
           category?: string
+          counterparty?: string | null
           created_at?: string
           description?: string | null
+          handled_by?: string | null
           id?: string
+          inventory_item_id?: string | null
           kind?: string
           tx_date?: string
           user_id?: string | null
@@ -480,6 +578,13 @@ export type Database = {
             columns: ["batch_id"]
             isOneToOne: false
             referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
             referencedColumns: ["id"]
           },
         ]
@@ -513,6 +618,17 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      record_purchase: {
+        Args: {
+          _cost: number
+          _date: string
+          _item_id: string
+          _notes: string
+          _qty: number
+          _vendor: string
+        }
+        Returns: string
       }
     }
     Enums: {
