@@ -19,7 +19,7 @@ import { toDateKey } from "@/lib/reminders";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/check")({
-  validateSearch: (s: Record<string, unknown>): { edit?: string } => (typeof s.edit === "string" ? { edit: s.edit } : {}),
+  validateSearch: (s: Record<string, unknown>): { edit?: string } => (typeof s["edit"] === "string" ? { edit: s["edit"] } : {}),
   head: () => ({ meta: [{ title: "Daily checklist — GreenLog" }, { name: "description", content: "Quick-tap daily greenhouse walk-through." }] }),
   component: CheckPage,
 });

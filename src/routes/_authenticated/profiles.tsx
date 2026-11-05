@@ -54,7 +54,7 @@ function ProfilesPage() {
       <Section title="Start from a template">
         <div className="flex flex-wrap gap-2">
           {Object.keys(PROFILE_TEMPLATES).map((k) => (
-            <Button key={k} variant="outline" onClick={() => open(PROFILE_TEMPLATES[k])}><Plus className="h-4 w-4" /> {k}</Button>
+            <Button key={k} variant="outline" onClick={() => open(PROFILE_TEMPLATES[k]!)}><Plus className="h-4 w-4" /> {k}</Button>
           ))}
           <Button variant="outline" onClick={() => open({ ...DEFAULT_TARGETS, crop: "", grade_metric: "leaves" })}><Plus className="h-4 w-4" /> Blank crop</Button>
         </div>
