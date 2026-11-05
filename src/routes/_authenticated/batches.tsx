@@ -152,7 +152,6 @@ function BatchesPage() {
           return e;
         }}
       />
-      />
     </div>
   );
 }
