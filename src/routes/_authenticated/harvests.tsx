@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useBatches, useMe } from "@/lib/use-me";
-import { useProfiles, targetsOf } from "@/lib/crop-profiles";
+import { useProfiles, targetsOf, isBrix } from "@/lib/crop-profiles";
 import { deleteRow, updateRow } from "@/lib/db-actions";
 import { FieldsDialog, DeleteButton, EditButton, toVals, fromVals, type Field } from "@/components/edit-dialog";
 import { PageHeader, Section, num } from "@/components/page-header";
@@ -28,7 +28,7 @@ function HarvestPage() {
     queryKey: ["harvests"],
     queryFn: async () => (await supabase.from("harvests").select("*, batches(code, crop)").order("harvested_on", { ascending: false })).data ?? [],
   });
-  const empty = { batch_id: "", harvested_on: toDateKey(new Date()), plants_harvested: "", total_weight_kg: "", avg_leaf_count: "", grade_a: "", grade_b: "", grade_c: "", rejected: "", notes: "" };
+  const empty = { batch_id: "", harvested_on: toDateKey(new Date()), plants_harvested: "", total_weight_kg: "", avg_leaf_count: "", avg_brix: "", grade_a: "", grade_b: "", grade_c: "", rejected: "", notes: "" };
   const [f, setF] = useState(empty);
   const { data: me } = useMe();
   const { data: profiles = [] } = useProfiles();
@@ -39,7 +39,7 @@ function HarvestPage() {
     { key: "batch_id", label: "Batch", type: "select", options: batches.map((b) => ({ value: b.id, label: b.code })) },
     { key: "harvested_on", label: "Date", type: "date" },
     { key: "plants_harvested", label: "Plants harvested", type: "number" }, { key: "total_weight_kg", label: "Total weight (kg)", type: "number" },
-    { key: "avg_leaf_count", label: "Avg leaves / plant", type: "number" },
+    { key: "avg_leaf_count", label: "Avg leaves / plant", type: "number" }, { key: "avg_brix", label: "Avg Brix °", type: "number" },
     { key: "grade_a", label: "Grade A", type: "number" }, { key: "grade_b", label: "Grade B", type: "number" },
     { key: "grade_c", label: "Grade C", type: "number" }, { key: "rejected", label: "Rejected", type: "number" },
     { key: "notes", label: "Notes", full: true },
@@ -52,7 +52,7 @@ function HarvestPage() {
     const { error } = await supabase.from("harvests").insert({
       batch_id: f.batch_id, harvested_on: f.harvested_on,
       plants_harvested: Number(f.plants_harvested) || 0, total_weight_kg: Number(f.total_weight_kg) || 0,
-      avg_leaf_count: num(f.avg_leaf_count),
+      avg_leaf_count: num(f.avg_leaf_count), avg_brix: num(f.avg_brix),
       grade_a: Number(f.grade_a) || 0, grade_b: Number(f.grade_b) || 0, grade_c: Number(f.grade_c) || 0, rejected: Number(f.rejected) || 0,
       notes: f.notes || null,
     });
@@ -79,7 +79,7 @@ function HarvestPage() {
           <div><Label>Date</Label><Input type="date" value={f.harvested_on} onChange={set("harvested_on")} /></div>
           <div><Label>Plants harvested</Label><Input type="number" value={f.plants_harvested} onChange={set("plants_harvested")} /></div>
           <div><Label>Total weight (kg)</Label><Input type="number" step="0.01" value={f.total_weight_kg} onChange={set("total_weight_kg")} /></div>
-          <div><Label>Avg leaves / plant</Label><Input type="number" step="0.1" value={f.avg_leaf_count} onChange={set("avg_leaf_count")} /></div>
+          {isBrix(prof) ? <div><Label>Avg Brix °</Label><Input type="number" step="0.1" value={f.avg_brix} onChange={set("avg_brix")} /></div> : <div><Label>Avg leaves / plant</Label><Input type="number" step="0.1" value={f.avg_leaf_count} onChange={set("avg_leaf_count")} /></div>}
           <div><Label>Grade A</Label><Input type="number" value={f.grade_a} onChange={set("grade_a")} /></div>
           <div><Label>Grade B</Label><Input type="number" value={f.grade_b} onChange={set("grade_b")} /></div>
           <div><Label>Grade C</Label><Input type="number" value={f.grade_c} onChange={set("grade_c")} /></div>
