@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, redirect, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, ClipboardCheck, Sprout, Scale, Boxes, Wallet, Users, LogOut, Menu, Leaf } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, Sprout, Scale, Boxes, Wallet, Users, LogOut, Menu, Leaf, LineChart } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/use-me";
@@ -22,6 +22,7 @@ const nav = [
   { to: "/batches", label: "Batches", icon: Sprout },
   { to: "/profiles", label: "Crop profiles", icon: Leaf },
   { to: "/harvests", label: "Harvest & grading", icon: Scale },
+  { to: "/insights", label: "Insights & planning", icon: LineChart },
   { to: "/inventory", label: "Inventory", icon: Boxes },
   { to: "/finance", label: "Income & expenses", icon: Wallet, owner: true },
   { to: "/team", label: "Team", icon: Users },

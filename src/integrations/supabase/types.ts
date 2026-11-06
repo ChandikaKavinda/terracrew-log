@@ -271,6 +271,51 @@ export type Database = {
           },
         ]
       }
+      farm_settings: {
+        Row: {
+          albert_ec_per_g_l: number
+          grow_days: number
+          id: number
+          kg_per_crate: number
+          nursery_days: number
+          ph_down_ml: number
+          ph_up_ml: number
+          tank_liters: number
+          total_slots: number
+          updated_at: string
+          vpd_max: number
+          vpd_min: number
+        }
+        Insert: {
+          albert_ec_per_g_l?: number
+          grow_days?: number
+          id?: number
+          kg_per_crate?: number
+          nursery_days?: number
+          ph_down_ml?: number
+          ph_up_ml?: number
+          tank_liters?: number
+          total_slots?: number
+          updated_at?: string
+          vpd_max?: number
+          vpd_min?: number
+        }
+        Update: {
+          albert_ec_per_g_l?: number
+          grow_days?: number
+          id?: number
+          kg_per_crate?: number
+          nursery_days?: number
+          ph_down_ml?: number
+          ph_up_ml?: number
+          tank_liters?: number
+          total_slots?: number
+          updated_at?: string
+          vpd_max?: number
+          vpd_min?: number
+        }
+        Relationships: []
+      }
       growth_measurements: {
         Row: {
           batch_id: string

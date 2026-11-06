@@ -6,6 +6,7 @@ import { useProfiles, targetsOf, inRange, GERMINATION_ISSUES, zoneOf, defectTags
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { CheckHistory } from "@/components/check-history";
+import { DosingPanel } from "@/components/dosing-panel";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBatches } from "@/lib/use-me";
@@ -312,6 +313,7 @@ function CheckPage() {
           {reading("air_temp", "Greenhouse temp (°C)", t.air_temp_min, t.air_temp_max)}
           {reading("humidity", "Humidity (%)", t.humidity_min, t.humidity_max)}
         </div>
+        <DosingPanel ec={num(f.ec)} ph={num(f.ph)} airTemp={num(f.air_temp)} humidity={num(f.humidity)} t={t} />
       </Section>
 
       <Section title="System & safety">
