@@ -17,6 +17,7 @@ import { Route as AuthenticatedCheckRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
 import { Route as AuthenticatedHarvestsRouteImport } from './routes/_authenticated/harvests'
+import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
 import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
 import { Route as AuthenticatedProfilesRouteImport } from './routes/_authenticated/profiles'
 import { Route as AuthenticatedTeamRouteImport } from './routes/_authenticated/team'
@@ -60,6 +61,11 @@ const AuthenticatedHarvestsRoute = AuthenticatedHarvestsRouteImport.update({
   path: '/harvests',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedInventoryRoute = AuthenticatedInventoryRouteImport.update({
   id: '/inventory',
   path: '/inventory',
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/finance': typeof AuthenticatedFinanceRoute
   '/harvests': typeof AuthenticatedHarvestsRoute
+  '/insights': typeof AuthenticatedInsightsRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/profiles': typeof AuthenticatedProfilesRoute
   '/team': typeof AuthenticatedTeamRoute
@@ -96,6 +103,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/finance': typeof AuthenticatedFinanceRoute
   '/harvests': typeof AuthenticatedHarvestsRoute
+  '/insights': typeof AuthenticatedInsightsRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/profiles': typeof AuthenticatedProfilesRoute
   '/team': typeof AuthenticatedTeamRoute
@@ -110,6 +118,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/finance': typeof AuthenticatedFinanceRoute
   '/_authenticated/harvests': typeof AuthenticatedHarvestsRoute
+  '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
   '/_authenticated/profiles': typeof AuthenticatedProfilesRoute
   '/_authenticated/team': typeof AuthenticatedTeamRoute
@@ -124,6 +133,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/finance'
     | '/harvests'
+    | '/insights'
     | '/inventory'
     | '/profiles'
     | '/team'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/finance'
     | '/harvests'
+    | '/insights'
     | '/inventory'
     | '/profiles'
     | '/team'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/finance'
     | '/_authenticated/harvests'
+    | '/_authenticated/insights'
     | '/_authenticated/inventory'
     | '/_authenticated/profiles'
     | '/_authenticated/team'
@@ -218,6 +230,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHarvestsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/insights': {
+      id: '/_authenticated/insights'
+      path: '/insights'
+      fullPath: '/insights'
+      preLoaderRoute: typeof AuthenticatedInsightsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/inventory': {
       id: '/_authenticated/inventory'
       path: '/inventory'
@@ -248,6 +267,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRoute
   AuthenticatedHarvestsRoute: typeof AuthenticatedHarvestsRoute
+  AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedInventoryRoute: typeof AuthenticatedInventoryRoute
   AuthenticatedProfilesRoute: typeof AuthenticatedProfilesRoute
   AuthenticatedTeamRoute: typeof AuthenticatedTeamRoute
@@ -259,6 +279,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedFinanceRoute: AuthenticatedFinanceRoute,
   AuthenticatedHarvestsRoute: AuthenticatedHarvestsRoute,
+  AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedInventoryRoute: AuthenticatedInventoryRoute,
   AuthenticatedProfilesRoute: AuthenticatedProfilesRoute,
   AuthenticatedTeamRoute: AuthenticatedTeamRoute,
