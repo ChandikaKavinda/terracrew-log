@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
-import { useMe, LKR } from "@/lib/use-me";
+import { useMe, LKR, useBatches } from "@/lib/use-me";
 import { deleteRow, updateRow } from "@/lib/db-actions";
 import { PageHeader, Section } from "@/components/page-header";
 import { FieldsDialog, DeleteButton, EditButton, toVals, fromVals, type Field } from "@/components/edit-dialog";
@@ -29,12 +29,13 @@ const cats = {
 function FinancePage() {
   const { data: me } = useMe();
   const qc = useQueryClient();
+  const { data: batches = [] } = useBatches();
   const { data: tx = [] } = useQuery({
     queryKey: ["transactions"],
     enabled: !!me?.isOwner,
     queryFn: async () => (await supabase.from("transactions").select("*").order("tx_date", { ascending: false })).data ?? [],
   });
-  const blank = () => ({ kind: "income" as "income" | "expense", category: "Lettuce sales", amount: "", tx_date: toDateKey(new Date()), description: "", counterparty: "", handled_by: me?.name ?? "" });
+  const blank = () => ({ kind: "income" as "income" | "expense", category: "Lettuce sales", amount: "", tx_date: toDateKey(new Date()), description: "", counterparty: "", handled_by: me?.name ?? "", batch_id: "" });
   const [f, setF] = useState(blank);
   const [edit, setEdit] = useState<(typeof tx)[number] | null>(null);
 
@@ -60,6 +61,7 @@ function FinancePage() {
     const { error } = await supabase.from("transactions").insert({
       kind: f.kind, category: f.category, amount, tx_date: f.tx_date,
       description: f.description.slice(0, 300) || null, counterparty: f.counterparty.slice(0, 120) || null, handled_by: f.handled_by.slice(0, 120) || null,
+      batch_id: f.batch_id && f.batch_id !== "__none" ? f.batch_id : null,
     });
     if (error) { toast.error(error.message); return; }
     setF({ ...f, amount: "", description: "", counterparty: "" });
@@ -77,6 +79,7 @@ function FinancePage() {
     { key: "amount", label: "Amount (Rs)", type: "number" }, { key: "tx_date", label: "Date", type: "date" },
     { key: "counterparty", label: editKind === "income" ? "Sold to (buyer)" : "Purchased from (supplier)" },
     { key: "handled_by", label: editKind === "income" ? "Sold by" : "Purchased by" },
+    { key: "batch_id", label: "Batch (for cost per head)", type: "select", options: [{ value: "__none", label: "Shared / farm-wide" }, ...batches.map((b) => ({ value: b.id, label: b.code }))] },
     { key: "description", label: "Note", full: true },
   ];
 
@@ -111,6 +114,13 @@ function FinancePage() {
           <div><Label>Date</Label><Input type="date" value={f.tx_date} onChange={(e) => setF({ ...f, tx_date: e.target.value })} /></div>
           <div><Label>{isInc ? "Sold to (buyer)" : "Purchased from (supplier)"}</Label><Input value={f.counterparty} onChange={(e) => setF({ ...f, counterparty: e.target.value })} placeholder={isInc ? "Keells, hotel, market…" : "Agro shop name"} /></div>
           <div><Label>{isInc ? "Sold by" : "Purchased by"}</Label><Input value={f.handled_by} onChange={(e) => setF({ ...f, handled_by: e.target.value })} placeholder={me?.name} /></div>
+          <div>
+            <Label>Batch</Label>
+            <Select value={f.batch_id || "__none"} onValueChange={(v) => setF({ ...f, batch_id: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="__none">Shared / farm-wide</SelectItem>{batches.map((b) => <SelectItem key={b.id} value={b.id}>{b.code}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
           <div><Label>Note</Label><Input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
           <div className="flex items-end"><Button className="w-full">Add</Button></div>
         </form>
@@ -165,6 +175,7 @@ function FinancePage() {
           const p = fromVals(v, editFields);
           if (!p["amount"] || (p["amount"] as number) <= 0) return "Enter an amount";
           if (!p["category"]) p["category"] = "Other";
+          if (p["batch_id"] === "__none") p["batch_id"] = null;
           const e = await updateRow("transactions", edit.id, p);
           if (!e) { toast.success("Entry updated"); refresh(); }
           return e;
