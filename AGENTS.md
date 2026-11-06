@@ -8,3 +8,4 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+- Agronomy formulas (dosing, VPD, forecasts, cost sharing) live as pure functions in src/lib/agronomy.ts with tests; farm-wide calibration is a single-row farm_settings table (id=1) so pages share one source.
