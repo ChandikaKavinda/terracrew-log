@@ -34,7 +34,7 @@ export function stageTargetsOf(p: Partial<CropProfile> | undefined, stage: Growt
 
 export function validPotId(id: string): boolean {
   const m = /^([1-9])([A-H])(10|[1-9])$/.exec(id);
-  if (!m) return false;
+  if (!m?.[1] || !m[2]) return false;
   return m[2] <= (m[1] === "5" || m[1] === "8" ? "H" : "E");
 }
 export function potZone(id: string, plantNo: number): Zone {
