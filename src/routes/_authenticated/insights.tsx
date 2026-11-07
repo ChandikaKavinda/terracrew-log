@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -5,8 +6,10 @@ import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useBatches, useMe, LKR } from "@/lib/use-me";
-import { useProfiles, targetsOf, zoneOf, isBrix, type Zone } from "@/lib/crop-profiles";
-import { DEFAULT_SETTINGS, dayNum, daysToTarget, fromDayNum, shareCost, slope, useFarmSettings, type FarmSettings } from "@/lib/agronomy";
+import { useProfiles, targetsOf, potZone, isBrix, type Zone } from "@/lib/crop-profiles";
+import { DEFAULT_SETTINGS, dayNum, daysToTarget, harvestDay, remainingPlants, fromDayNum, shareCost, slope, useFarmSettings, type FarmSettings } from "@/lib/agronomy";
+import { usePopulation } from "@/lib/use-population";
+import { SeedingPrompts } from "@/components/seeding-prompts";
 import { toDateKey } from "@/lib/reminders";
 import { PageHeader, Section } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -17,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export const Route = createFileRoute("/_authenticated/insights")({
-  head: () => ({ meta: [{ title: "Insights & planning — GreenLog" }, { name: "description", content: "Channel gradients, yield forecasts, cost per head and planting planner." }] }),
+  head: () => pageMeta("Insights & planning — GreenLog", "Plan nursery seeding, channel turnover and harvest forecasts with live plant counts."),
   component: InsightsPage,
 });
 
@@ -32,6 +35,8 @@ function InsightsPage() {
   const { data: batches = [] } = useBatches();
   const { data: profiles = [] } = useProfiles();
   const { data: s = DEFAULT_SETTINGS } = useFarmSettings();
+  const { data: population } = usePopulation();
+  const liveBatches = batches.map((b) => ({ ...b, plant_count: remainingPlants(b, population?.harvested[b.id], population?.lost[b.id]) }));
   const growing = batches.filter((b) => b.status === "growing");
   const [bid, setBid] = useState("");
   useEffect(() => { if (!bid && growing[0]) setBid(growing[0].id); }, [growing, bid]);
@@ -56,21 +61,23 @@ function InsightsPage() {
           </Select>
         } />
       <Gradient growth={growth} />
-      {batch && <Forecast batch={batch} growth={growth} harvests={harvests} batches={batches} s={s} profile={profile} />}
-      <Planner batches={batches} s={s} />
+      {batch && <Forecast batch={{ ...batch, plant_count: remainingPlants(batch, population?.harvested[batch.id], population?.lost[batch.id]) }} growth={growth} harvests={harvests} batches={batches} s={s} profile={profile} />}
+      <SeedingPrompts />
+      <Planner batches={liveBatches} s={s} />
       {me?.isOwner && <Economics batches={batches} harvests={harvests} />}
       {me?.isOwner && <SettingsForm s={s} />}
     </div>
   );
 }
 
-type G = { measured_on: string; plant_no: number; height_cm: number | null; leaf_count: number | null };
+type G = { measured_on: string; plant_no: number; height_cm: number | null; leaf_count: number | null; pot_id?: string | null; zone?: string | null };
+const growthZone = (g: G): Zone => g.zone === "Inlet" || g.zone === "Mid" || g.zone === "Outlet" ? g.zone : potZone(g.pot_id ?? "", g.plant_no);
 
 function Gradient({ growth }: { growth: G[] }) {
   const { series, rates } = useMemo(() => {
     const byDate = new Map<string, Record<string, number[]>>();
     for (const g of growth) {
-      const z = zoneOf(g.plant_no);
+      const z = growthZone(g);
       const e = byDate.get(g.measured_on) ?? {};
       if (g.height_cm !== null) (e[z] ??= []).push(Number(g.height_cm));
       byDate.set(g.measured_on, e);
@@ -79,7 +86,7 @@ function Gradient({ growth }: { growth: G[] }) {
     const series = [...byDate.entries()].map(([d, e]) => ({ date: d.slice(5), day: dayNum(d), Inlet: avg(e["Inlet"]), Mid: avg(e["Mid"]), Outlet: avg(e["Outlet"]) }));
     const rates = ZONES.map((z) => {
       const h = slope(series.filter((p) => p[z] !== null).map((p) => ({ x: p.day, y: p[z] as number })));
-      const lv = slope(growth.filter((g) => zoneOf(g.plant_no) === z && g.leaf_count !== null).map((g) => ({ x: dayNum(g.measured_on), y: Number(g.leaf_count) })));
+      const lv = slope(growth.filter((g) => growthZone(g) === z && g.leaf_count !== null).map((g) => ({ x: dayNum(g.measured_on), y: Number(g.leaf_count) })));
       return { zone: z, "Height cm/day": h === null ? 0 : +h.toFixed(2), "Leaves/day": lv === null ? 0 : +lv.toFixed(2) };
     });
     return { series, rates };
@@ -128,7 +135,7 @@ function Forecast({ batch, growth, harvests, batches, s, profile }: { batch: B; 
   const hs = harvests.filter((h) => same.some((b) => b.id === h.batch_id));
   const plants = hs.reduce((a, h) => a + h.plants_harvested, 0);
   const histKgPerPlant = plants ? hs.reduce((a, h) => a + Number(h.total_weight_kg), 0) / plants : null;
-  const cycles = same.filter((b) => b.transplanted_on && b.harvested_on).map((b) => dayNum(b.harvested_on!) - dayNum(b.transplanted_on!));
+  const cycles = same.flatMap((b) => b.transplanted_on && b.harvested_on ? [dayNum(b.harvested_on) - dayNum(b.transplanted_on)] : []);
   const histDays = cycles.length ? Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length) : null;
 
   const byDay = new Map<number, number[]>();
@@ -138,11 +145,13 @@ function Forecast({ batch, growth, harvests, batches, s, profile }: { batch: B; 
   const last = pts.at(-1);
   const dt = !brix && last ? daysToTarget(last.y, t.grade_a_min_leaves, rate) : null;
 
-  const start = batch.transplanted_on ?? batch.seeded_on;
-  const fallbackDay = dayNum(start) + (histDays ?? s.grow_days);
+  const fallbackDay = harvestDay(batch, s, histDays ?? s.grow_days);
   let predicted: number; let basis: string;
-  if (dt !== null && last) { predicted = Math.max(last.x + dt, dayNum(today())); basis = `sentinel leaf velocity ${rate!.toFixed(2)} leaves/day → ${t.grade_a_min_leaves} leaves`; if (histDays) { predicted = Math.round(predicted * 0.7 + fallbackDay * 0.3); basis += `, blended with ${histDays}-day history`; } }
-  else { predicted = fallbackDay; basis = histDays ? `average of ${cycles.length} past ${batch.crop} cycles (${histDays} days)` : `default ${s.grow_days}-day grow-out`; }
+  if (batch.status === "nursery" || !batch.transplanted_on) {
+    predicted = fallbackDay;
+    basis = batch.expected_harvest ? "planned harvest date (nursery phase)" : `nursery phase: seeding + ${s.nursery_days} nursery days + ${histDays ?? s.grow_days} grow-out days`;
+  } else if (dt !== null && last) { predicted = Math.max(last.x + dt, dayNum(today())); basis = `sentinel leaf velocity ${(rate ?? 0).toFixed(2)} leaves/day → ${t.grade_a_min_leaves} leaves`; if (histDays) { predicted = Math.max(dayNum(today()), Math.round(predicted * 0.7 + fallbackDay * 0.3)); basis += `, blended with ${histDays}-day history`; } }
+  else { predicted = fallbackDay; basis = batch.expected_harvest ? "planned harvest date" : histDays ? `average of ${cycles.length} past ${batch.crop} cycles (${histDays} days)` : `default ${s.grow_days}-day grow-out`; }
 
   const heads = batch.plant_count ?? batch.germinated ?? 0;
   const kgPer = histKgPerPlant ?? t.grade_a_min_g / 1000;
@@ -178,7 +187,7 @@ function Planner({ batches, s }: { batches: B[]; s: FarmSettings }) {
       const row: Record<string, number | string> = { week: fromDayNum(ws).slice(5) };
       let used = 0, freeing = 0;
       for (const b of batches) {
-        if (b.status === "harvested" && b.harvested_on && dayNum(b.harvested_on) < ws) continue;
+        if (b.status === "harvested") continue;
         const w = batchWindow(b, s); const n = b.plant_count ?? b.germinated ?? b.seeds_sown ?? 0;
         if (w.start <= we && w.end >= ws) { row[b.code] = n; used += n; }
         if (w.end >= ws && w.end <= we) freeing += n;
@@ -200,7 +209,7 @@ function Planner({ batches, s }: { batches: B[]; s: FarmSettings }) {
           <div className="grid gap-px overflow-hidden rounded-md" style={{ gridTemplateColumns: "repeat(50, minmax(0, 1fr))" }}>
             {(() => {
               const cells: string[] = [];
-              codes.forEach((c, i) => { const n = Number(current.row[c] ?? 0); for (let k = 0; k < n && cells.length < s.total_slots; k++) cells.push(palette[i % palette.length]!); });
+              codes.forEach((c, i) => { const n = Number(current.row[c] ?? 0); for (let k = 0; k < n && cells.length < s.total_slots; k++) cells.push(palette[i % palette.length] ?? "var(--muted)"); });
               while (cells.length < s.total_slots) cells.push("var(--muted)");
               return cells.map((c, i) => <div key={i} className="aspect-square" style={{ background: c }} />);
             })()}

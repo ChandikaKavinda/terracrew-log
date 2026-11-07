@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -11,9 +12,12 @@ import { PageHeader, Section } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SeedingPrompts } from "@/components/seeding-prompts";
+import { useProfiles, stageTargetsOf, stageOf } from "@/lib/crop-profiles";
+import { DEFAULT_SETTINGS, useFarmSettings } from "@/lib/agronomy";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard — GreenLog" }] }),
+  head: () => pageMeta("Dashboard — GreenLog", "View greenhouse readings, growth trends, quality and nursery seeding reminders."),
   component: Dashboard,
 });
 
@@ -75,6 +79,12 @@ function Dashboard() {
 
   const checks = data?.checks ?? [];
   const latest = checks[checks.length - 1];
+  const { data: profiles = [] } = useProfiles();
+  const { data: settings = DEFAULT_SETTINGS } = useFarmSettings();
+  const latestBatch = batches.find((b) => b.id === latest?.batch_id);
+  const latestProfile = profiles.find((p) => p.id === latestBatch?.profile_id);
+  const stage = latest?.growth_stage === "nursery" || latest?.growth_stage === "vegetative" || latest?.growth_stage === "pre_harvest" ? latest.growth_stage : stageOf(latestBatch?.status, latestBatch?.transplanted_on, latest?.check_date ?? toDateKey(new Date()), settings.grow_days);
+  const targets = stageTargetsOf(latestProfile, stage);
 
   // One point per day (average if several checks)
   const daily = useMemo(() => {
@@ -230,12 +240,13 @@ function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        {kpi(<Gauge className="h-4 w-4" />, "EC", latest?.ec, "mS/cm", 0.8, 1.2)}
-        {kpi(<FlaskConical className="h-4 w-4" />, "pH", latest?.ph, "", 5.5, 6.5)}
-        {kpi(<Droplets className="h-4 w-4" />, "Water temp", latest?.water_temp, "°C", 18, 24)}
-        {kpi(<Thermometer className="h-4 w-4" />, "Air temp", latest?.air_temp, "°C", 18, 28)}
-        {kpi(<Wind className="h-4 w-4" />, "Humidity", latest?.humidity, "%", 50, 70)}
+        {kpi(<Gauge className="h-4 w-4" />, "EC", latest?.ec, "mS/cm", targets.ec_min, targets.ec_max)}
+        {kpi(<FlaskConical className="h-4 w-4" />, "pH", latest?.ph, "", targets.ph_min, targets.ph_max)}
+        {kpi(<Droplets className="h-4 w-4" />, "Water temp", latest?.water_temp, "°C", targets.water_temp_min, targets.water_temp_max)}
+        {kpi(<Thermometer className="h-4 w-4" />, "Air temp", latest?.air_temp, "°C", targets.air_temp_min, targets.air_temp_max)}
+        {kpi(<Wind className="h-4 w-4" />, "Humidity", latest?.humidity, "%", targets.humidity_min, targets.humidity_max)}
       </div>
+      <SeedingPrompts />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Section title="EC & pH" desc="Shaded bands show the target range. Adjust nutrients when lines leave them.">
@@ -245,8 +256,8 @@ function Dashboard() {
               <XAxis dataKey="date" tick={tick} />
               <YAxis yAxisId="ec" tick={tick} domain={[0, 3]} />
               <YAxis yAxisId="ph" orientation="right" tick={tick} domain={[4, 8]} />
-              <ReferenceArea yAxisId="ec" y1={0.8} y2={1.2} fill="var(--chart-1)" fillOpacity={0.08} />
-              <ReferenceArea yAxisId="ph" y1={5.5} y2={6.5} fill="var(--chart-2)" fillOpacity={0.08} />
+              <ReferenceArea yAxisId="ec" y1={targets.ec_min} y2={targets.ec_max} fill="var(--chart-1)" fillOpacity={0.08} />
+              <ReferenceArea yAxisId="ph" y1={targets.ph_min} y2={targets.ph_max} fill="var(--chart-2)" fillOpacity={0.08} />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend />
               <Line yAxisId="ec" dataKey="ec" name="EC" stroke="var(--chart-1)" strokeWidth={2} connectNulls />

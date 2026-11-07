@@ -14,6 +14,34 @@ export const DEFAULT_TARGETS = {
 
 export type Targets = typeof DEFAULT_TARGETS;
 
+export const STAGES = ["nursery", "vegetative", "pre_harvest"] as const;
+export type GrowthStage = typeof STAGES[number];
+export const STAGE_LABELS: Record<GrowthStage, string> = { nursery: "Nursery", vegetative: "Vegetative", pre_harvest: "Pre-harvest" };
+export function stageOf(status: string | undefined, transplanted: string | null | undefined, date: string, growDays: number): GrowthStage {
+  if (status === "nursery") return "nursery";
+  const age = transplanted ? (new Date(date).getTime() - new Date(transplanted).getTime()) / 86400000 : 0;
+  return age >= Math.max(0, growDays - 7) ? "pre_harvest" : "vegetative";
+}
+export function stageTargetsOf(p: Partial<CropProfile> | undefined, stage: GrowthStage): Targets {
+  const base = targetsOf(p);
+  const stages = (p?.stage_targets ?? {}) as Partial<Record<GrowthStage, Partial<Targets>>>;
+  const override = stages[stage];
+  if (override) for (const k of Object.keys(base) as (keyof Targets)[]) {
+    const v = override[k]; if (typeof v === "number" && Number.isFinite(v)) base[k] = v;
+  }
+  return base;
+}
+
+export function validPotId(id: string): boolean {
+  const m = /^([1-9])([A-H])(10|[1-9])$/.exec(id);
+  if (!m?.[1] || !m[2]) return false;
+  return m[2] <= (m[1] === "5" || m[1] === "8" ? "H" : "E");
+}
+export function potZone(id: string, plantNo: number): Zone {
+  const m = /^\d[A-H](10|[1-9])$/.exec(id);
+  return validPotId(id) && m ? zoneOf(Number(m[1])) : zoneOf(plantNo);
+}
+
 export function targetsOf(p?: Partial<CropProfile> | null): Targets {
   const out = { ...DEFAULT_TARGETS };
   if (!p) return out;

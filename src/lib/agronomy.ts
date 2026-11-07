@@ -77,6 +77,35 @@ export function slope(points: { x: number; y: number }[]): number | null {
 export const dayNum = (d: string) => Math.floor(new Date(d + "T00:00:00Z").getTime() / 86400000);
 export const fromDayNum = (n: number) => new Date(n * 86400000).toISOString().slice(0, 10);
 
+export type PopulationBatch = { id: string; status: string; seeded_on: string; transplanted_on: string | null; expected_harvest: string | null; plant_count: number | null; germinated: number | null; seeds_sown?: number | null };
+export function harvestDay(b: PopulationBatch, s: FarmSettings, growDays = s.grow_days): number {
+  if (b.expected_harvest) return dayNum(b.expected_harvest);
+  return b.status === "nursery" || !b.transplanted_on
+    ? dayNum(b.seeded_on) + s.nursery_days + growDays
+    : dayNum(b.transplanted_on) + growDays;
+}
+export function remainingPlants(b: Pick<PopulationBatch, "plant_count" | "germinated" | "seeds_sown">, harvested = 0, lost = 0) {
+  return Math.max(0, (b.plant_count ?? b.germinated ?? b.seeds_sown ?? 0) - harvested - lost);
+}
+export function effectiveTankLiters(capacity: number, level: string, actual: number | null): number | null {
+  if (actual !== null) return Number.isFinite(actual) && actual > 0 && actual <= capacity ? actual : null;
+  const fraction: Record<string, number> = { full: 1, "3/4": 0.75, "1/2": 0.5, "1/4": 0.25 };
+  return fraction[level] !== undefined ? capacity * fraction[level] : null;
+}
+export function seedingNeeds(batches: PopulationBatch[], s: FarmSettings, today: string, counts: Record<string, number> = {}) {
+  const groups = new Map<number, number>();
+  for (const b of batches.filter((b) => b.status === "growing")) {
+    const release = Math.max(dayNum(today), harvestDay(b, s));
+    const quantity = counts[b.id] ?? remainingPlants(b);
+    groups.set(release, (groups.get(release) ?? 0) + quantity);
+  }
+  let nurserySupply = batches.filter((b) => b.status === "nursery").reduce((n, b) => n + (counts[b.id] ?? remainingPlants(b)), 0);
+  return [...groups].sort(([a], [b]) => a - b).map(([release, count]) => {
+    const covered = Math.min(count, nurserySupply); nurserySupply -= covered;
+    return { release: fromDayNum(release), seedBy: fromDayNum(release - s.nursery_days), quantity: count - covered };
+  }).filter((n) => n.quantity > 0);
+}
+
 /** Days until mean leaf count reaches the target, given current mean and daily rate. */
 export function daysToTarget(current: number, target: number, ratePerDay: number | null): number | null {
   if (current >= target) return 0;

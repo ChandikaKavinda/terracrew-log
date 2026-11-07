@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -5,7 +6,7 @@ import { toast } from "sonner";
 import { Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/use-me";
-import { useProfiles, DEFAULT_TARGETS, PROFILE_TEMPLATES, defectTagsOf, isBrix, type CropProfile } from "@/lib/crop-profiles";
+import { useProfiles, DEFAULT_TARGETS, PROFILE_TEMPLATES, defectTagsOf, isBrix, STAGES, STAGE_LABELS, type GrowthStage, type CropProfile } from "@/lib/crop-profiles";
 import { deleteRow, updateRow } from "@/lib/db-actions";
 import { PageHeader, Section } from "@/components/page-header";
 import { FieldsDialog, DeleteButton, EditButton, toVals, fromVals, type Field } from "@/components/edit-dialog";
@@ -15,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/_authenticated/profiles")({
-  head: () => ({ meta: [{ title: "Crop profiles — GreenLog" }, { name: "description", content: "Seasonal targets, grading standards and defect tags per crop." }] }),
+  head: () => pageMeta("Crop profiles — GreenLog", "Customize seasonal growth-stage targets, harvest standards and crop defect tags."),
   component: ProfilesPage,
 });
 
@@ -42,9 +43,15 @@ function ProfilesPage() {
   const [edit, setEdit] = useState<Partial<CropProfile> | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tag, setTag] = useState("");
+  const [stages, setStages] = useState<Record<string, Record<string, string>>>({});
+  const stageFields = fields.filter((f) => /^(ec|ph|water_temp|air_temp|humidity)_(min|max)$/.test(f.key));
   const refresh = () => qc.invalidateQueries({ queryKey: ["crop_profiles"] });
 
-  const open = (p: Partial<CropProfile>) => { setEdit(p); setTags(p.defect_tags?.length ? [...p.defect_tags] : []); setTag(""); };
+  const open = (p: Partial<CropProfile>) => {
+    setEdit(p); setTags(p.defect_tags?.length ? [...p.defect_tags] : []); setTag("");
+    const source = (p.stage_targets ?? {}) as Partial<Record<GrowthStage, Record<string, number>>>;
+    setStages(Object.fromEntries(STAGES.map((stage) => [stage, Object.fromEntries(stageFields.map((f) => [f.key, source[stage]?.[f.key] == null ? "" : String(source[stage]?.[f.key])]))])));
+  };
   const addTag = () => { const v = tag.trim(); if (v && !tags.includes(v)) setTags([...tags, v]); setTag(""); };
 
   return (
@@ -54,7 +61,7 @@ function ProfilesPage() {
       <Section title="Start from a template">
         <div className="flex flex-wrap gap-2">
           {Object.keys(PROFILE_TEMPLATES).map((k) => (
-            <Button key={k} variant="outline" onClick={() => open(PROFILE_TEMPLATES[k]!)}><Plus className="h-4 w-4" /> {k}</Button>
+            <Button key={k} variant="outline" onClick={() => open(PROFILE_TEMPLATES[k] ?? {})}><Plus className="h-4 w-4" /> {k}</Button>
           ))}
           <Button variant="outline" onClick={() => open({ ...DEFAULT_TARGETS, crop: "", grade_metric: "leaves" })}><Plus className="h-4 w-4" /> Blank crop</Button>
         </div>
@@ -79,8 +86,8 @@ function ProfilesPage() {
               <dt className="text-muted-foreground">Water °C</dt><dd>{p.water_temp_min ?? "?"}–{p.water_temp_max ?? "?"}</dd>
               <dt className="text-muted-foreground">Air °C</dt><dd>{p.air_temp_min ?? "?"}–{p.air_temp_max ?? "?"}</dd>
               <dt className="text-muted-foreground">Humidity</dt><dd>{p.humidity_min ?? "?"}–{p.humidity_max ?? "?"}%</dd>
-              <dt className="text-muted-foreground">Grade A</dt><dd>&gt;{p.grade_a_min_g ?? "?"} g{isBrix(p) ? `, ≥${p.grade_a_min_brix ?? "?"}° Brix` : `, ≥${p.grade_a_min_leaves ?? 0} leaves`}</dd>
-              <dt className="text-muted-foreground">Grade B</dt><dd>&gt;{p.grade_b_min_g ?? "?"} g{isBrix(p) ? `, ≥${p.grade_b_min_brix ?? "?"}° Brix` : ""}</dd>
+              <dt className="text-muted-foreground">Grade A</dt><dd>≥{p.grade_a_min_g ?? "?"} g{isBrix(p) ? `, ≥${p.grade_a_min_brix ?? "?"}° Brix` : `, ≥${p.grade_a_min_leaves ?? 0} leaves`}</dd>
+              <dt className="text-muted-foreground">Grade B</dt><dd>≥{p.grade_b_min_g ?? "?"} g{isBrix(p) ? `, ≥${p.grade_b_min_brix ?? "?"}° Brix` : ""}</dd>
             </dl>
             <div className="mt-2 flex flex-wrap gap-1">{defectTagsOf(p).map((t) => <Badge key={t} variant="secondary" className="text-[10px] font-normal">{t}</Badge>)}</div>
           </div>
@@ -92,6 +99,10 @@ function ProfilesPage() {
         title={edit?.id ? "Edit crop profile" : "New crop profile"} fields={fields}
         initial={edit ? toVals(edit as Record<string, unknown>, fields) : {}}
         extra={
+          <div className="space-y-5">
+            <div><h3 className="font-semibold">Growth-stage targets</h3><p className="mb-3 text-xs text-muted-foreground">Blank values inherit the profile targets above.</p>
+              {STAGES.map((stage) => <fieldset key={stage} className="mb-4 border-t pt-3"><legend className="font-medium">{STAGE_LABELS[stage]}</legend><div className="grid grid-cols-2 gap-3">{stageFields.map((field) => <div key={field.key}><Label htmlFor={`${stage}-${field.key}`} className="text-xs">{field.label}</Label><Input id={`${stage}-${field.key}`} type="number" step="any" placeholder="Inherit" value={stages[stage]?.[field.key] ?? ""} onChange={(e) => setStages((x) => ({ ...x, [stage]: { ...x[stage], [field.key]: e.target.value } }))} /></div>)}</div></fieldset>)}
+            </div>
           <div>
             <Label>Defect tags for this crop (used in quality counters)</Label>
             <div className="mt-2 flex flex-wrap gap-1">
@@ -105,12 +116,24 @@ function ProfilesPage() {
               <Button type="button" variant="outline" onClick={addTag}>Add</Button>
             </div>
           </div>
+          </div>
         }
         onSave={async (v) => {
           const patch: Record<string, unknown> = { ...fromVals(v, fields), defect_tags: tags };
           if (!patch["name"]) return "Give the profile a name";
           if (!patch["crop"]) return "Enter the crop name";
           if (!patch["grade_metric"]) patch["grade_metric"] = "leaves";
+          const overrides: Record<string, Record<string, number>> = {};
+          for (const stage of STAGES) {
+            overrides[stage] = {};
+            for (const field of stageFields) { const value = stages[stage]?.[field.key]; if (value?.trim()) { const n = Number(value); if (!Number.isFinite(n)) return "Enter valid stage targets"; overrides[stage][field.key] = n; } }
+            for (const prefix of ["ec", "ph", "water_temp", "air_temp", "humidity"]) {
+              const min = overrides[stage][`${prefix}_min`] ?? patch[`${prefix}_min`];
+              const max = overrides[stage][`${prefix}_max`] ?? patch[`${prefix}_max`];
+              if (min != null && max != null && Number(min) > Number(max)) return `${STAGE_LABELS[stage]} ${prefix}: minimum must not exceed maximum`;
+            }
+          }
+          patch["stage_targets"] = overrides;
           if (edit?.id) { const e = await updateRow("crop_profiles", edit.id, patch); if (e) return e; }
           else { const { error } = await supabase.from("crop_profiles").insert(patch as never); if (error) return error.message; }
           toast.success("Profile saved"); refresh(); return null;

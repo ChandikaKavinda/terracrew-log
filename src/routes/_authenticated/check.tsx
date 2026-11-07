@@ -1,8 +1,10 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Minus, Plus, RotateCcw } from "lucide-react";
-import { useProfiles, targetsOf, inRange, GERMINATION_ISSUES, zoneOf, defectTagsOf, type Zone } from "@/lib/crop-profiles";
+import { useProfiles, stageTargetsOf, stageOf, STAGES, STAGE_LABELS, inRange, GERMINATION_ISSUES, potZone, defectTagsOf, type Zone, type GrowthStage } from "@/lib/crop-profiles";
+import { DEFAULT_SETTINGS, effectiveTankLiters, useFarmSettings } from "@/lib/agronomy";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { CheckHistory } from "@/components/check-history";
@@ -21,7 +23,7 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/check")({
   validateSearch: (s: Record<string, unknown>): { edit?: string } => (typeof s["edit"] === "string" ? { edit: s["edit"] } : {}),
-  head: () => ({ meta: [{ title: "Daily checklist — GreenLog" }, { name: "description", content: "Quick-tap daily greenhouse walk-through." }] }),
+  head: () => pageMeta("Daily checklist — GreenLog", "Record crop-stage readings, tank volumes, fixed-pot growth and crop quality."),
   component: CheckPage,
 });
 
@@ -94,7 +96,7 @@ function Counter({ label, value, onChange, max, disabled }: { label: string; val
 
 const emptyForm = () => ({
   check_date: toDateKey(new Date()), check_time: nowTime(), batch_id: "",
-  tank_level: "full", tank_debris: false, water_source: "rain",
+  tank_level: "full", tank_liters_actual: "", growth_stage: "", tank_debris: false, water_source: "rain",
   ec: "", ph: "", water_temp: "", air_temp: "", humidity: "",
   automation_ok: true, ppe_worn: true,
   gh_defects: false, gh_defects_notes: "", insects: false, insects_notes: "", leaks: false, leaks_notes: "",
@@ -119,11 +121,14 @@ function CheckPage() {
   const [busy, setBusy] = useState(false);
   const [loadedEdit, setLoadedEdit] = useState<string | null>(null);
   const { data: profiles = [] } = useProfiles();
+  const { data: settings = DEFAULT_SETTINGS } = useFarmSettings();
 
   const selBatch = batches.find((b) => b.id === f.batch_id);
-  const active = batches.filter((b) => b.status === "growing" || b.id === f.batch_id);
+  const active = batches.filter((b) => b.status !== "harvested" || b.id === f.batch_id);
   const profile = profiles.find((p) => p.id === selBatch?.profile_id);
-  const t = targetsOf(profile);
+  const stage = (f.growth_stage || stageOf(selBatch?.status, selBatch?.transplanted_on, f.check_date, settings.grow_days)) as GrowthStage;
+  const t = stageTargetsOf(profile, stage);
+  const zone = (i: number) => potZone(selBatch?.sentinel_pot_ids[i] ?? "", i + 1);
   const tags = defectTagsOf(profile);
   const up = <K extends keyof ReturnType<typeof emptyForm>>(k: K, v: ReturnType<typeof emptyForm>[K]) => setF((x) => ({ ...x, [k]: v }));
 
@@ -132,10 +137,11 @@ function CheckPage() {
     queryKey: ["check-edit", edit],
     enabled: !!edit,
     queryFn: async () => {
+      if (!edit) throw new Error("Choose a checklist to edit");
       const [c, g, q] = await Promise.all([
-        supabase.from("daily_checks").select("*").eq("id", edit!).single(),
-        supabase.from("growth_measurements").select("*").eq("check_id", edit!),
-        supabase.from("quality_inspections").select("*").eq("check_id", edit!).limit(1),
+        supabase.from("daily_checks").select("*").eq("id", edit).single(),
+        supabase.from("growth_measurements").select("*").eq("check_id", edit),
+        supabase.from("quality_inspections").select("*").eq("check_id", edit).limit(1),
       ]);
       if (c.error) throw c.error;
       return { check: c.data, growth: g.data ?? [], quality: q.data?.[0] ?? null };
@@ -147,7 +153,7 @@ function CheckPage() {
     const c = editData.check;
     setF({
       check_date: c.check_date, check_time: String(c.check_time).slice(0, 5), batch_id: c.batch_id ?? "",
-      tank_level: c.tank_level ?? "full", tank_debris: c.tank_debris, water_source: c.water_source,
+      tank_level: c.tank_level ?? "full", tank_liters_actual: s(c.tank_liters_actual), growth_stage: c.growth_stage ?? "", tank_debris: c.tank_debris, water_source: c.water_source,
       ec: s(c.ec), ph: s(c.ph), water_temp: s(c.water_temp), air_temp: s(c.air_temp), humidity: s(c.humidity),
       automation_ok: c.automation_ok, ppe_worn: c.ppe_worn,
       gh_defects: c.gh_defects, gh_defects_notes: c.gh_defects_notes ?? "", insects: c.insects, insects_notes: c.insects_notes ?? "",
@@ -195,11 +201,12 @@ function CheckPage() {
     if (defective > SAMPLE) { toast.error(`Defect counts add up to more than ${SAMPLE} plants.`); return; }
     const phV = num(f.ph);
     if (phV !== null && (phV < 0 || phV > 14)) { toast.error("pH must be between 0 and 14."); return; }
+    if (f.tank_liters_actual && effectiveTankLiters(settings.tank_liters, f.tank_level, num(f.tank_liters_actual)) === null) { toast.error(`Measured volume must be above 0 and no more than ${settings.tank_liters} L`); return; }
     setBusy(true);
     try {
       const payload = {
         check_date: f.check_date, check_time: f.check_time, batch_id: f.batch_id || null,
-        tank_level: f.tank_level, tank_debris: f.tank_debris, water_source: f.water_source,
+        tank_level: f.tank_level, tank_liters_actual: num(f.tank_liters_actual), growth_stage: stage, tank_debris: f.tank_debris, water_source: f.water_source,
         ec: num(f.ec), ph: phV, water_temp: num(f.water_temp), air_temp: num(f.air_temp), humidity: num(f.humidity),
         automation_ok: f.automation_ok, ppe_worn: f.ppe_worn,
         gh_defects: f.gh_defects, gh_defects_notes: f.gh_defects_notes || null,
@@ -222,7 +229,7 @@ function CheckPage() {
 
       if (f.batch_id) {
         const rows = growth
-          .map((g, i) => ({ batch_id: f.batch_id, check_id: checkId, plant_no: i + 1, zone: zoneOf(i + 1), variety: g.v || null, measured_on: f.check_date, height_cm: num(g.h), leaf_count: g.l ? Math.round(Number(g.l)) : null }))
+          .map((g, i) => ({ batch_id: f.batch_id, check_id: checkId, plant_no: i + 1, zone: zone(i), pot_id: selBatch?.sentinel_pot_ids[i] || null, variety: g.v || null, measured_on: f.check_date, height_cm: num(g.h), leaf_count: g.l ? Math.round(Number(g.l)) : null }))
           .filter((r) => r.height_cm !== null || r.leaf_count !== null);
         if (rows.length) {
           const { error: ge } = await supabase.from("growth_measurements").upsert(rows, { onConflict: "batch_id,plant_no,measured_on" });
@@ -264,7 +271,7 @@ function CheckPage() {
   };
 
   const zoneAvg = (z: Zone) => {
-    const hs = growth.map((g, i) => ({ g, z: zoneOf(i + 1) })).filter((x) => x.z === z && x.g.h !== "").map((x) => Number(x.g.h));
+    const hs = growth.map((g, i) => ({ g, z: zone(i) })).filter((x) => x.z === z && x.g.h !== "").map((x) => Number(x.g.h));
     return hs.length ? (hs.reduce((a, b) => a + b, 0) / hs.length).toFixed(1) : "–";
   };
 
@@ -284,8 +291,8 @@ function CheckPage() {
           <div><Label>Date</Label><Input className="h-12" type="date" value={f.check_date} onChange={(e) => up("check_date", e.target.value)} /></div>
           <div><Label>Time</Label><Input className="h-12" type="time" value={f.check_time} onChange={(e) => up("check_time", e.target.value)} /></div>
           <div>
-            <Label>Growing batch</Label>
-            <Select value={f.batch_id} onValueChange={(v) => up("batch_id", v)}>
+            <Label>Crop batch</Label>
+            <Select value={f.batch_id} onValueChange={(v) => setF((x) => ({ ...x, batch_id: v, growth_stage: "" }))}>
               <SelectTrigger className="h-12"><SelectValue placeholder={active.length ? "Choose batch" : "No growing batches"} /></SelectTrigger>
               <SelectContent>{active.map((b) => <SelectItem key={b.id} value={b.id}>{b.code} · {b.crop}</SelectItem>)}</SelectContent>
             </Select>
@@ -298,6 +305,7 @@ function CheckPage() {
           <div><Label className="mb-2 block">Water level</Label>
             <Pills value={f.tank_level} onChange={(v) => up("tank_level", v)} options={[{ value: "full", label: "Full" }, { value: "3/4", label: "3/4" }, { value: "1/2", label: "1/2" }, { value: "1/4", label: "1/4" }, { value: "low", label: "Low" }]} />
           </div>
+          <div className="max-w-sm"><Label htmlFor="actual-liters">Measured tank volume (L)</Label><Input id="actual-liters" type="number" min="0.1" max={settings.tank_liters} step="0.1" value={f.tank_liters_actual} onChange={(e) => up("tank_liters_actual", e.target.value)} placeholder={`Optional · capacity ${settings.tank_liters} L`} /><p className="mt-1 text-xs text-muted-foreground">Measured volume overrides the selected fraction. Low requires a measurement.</p></div>
           <div><Label className="mb-2 block">Running on</Label>
             <Pills value={f.water_source} onChange={(v) => up("water_source", v)} options={[{ value: "rain", label: "Rain water" }, { value: "tap", label: "Tap water" }]} />
           </div>
@@ -305,7 +313,8 @@ function CheckPage() {
         </div>
       </Section>
 
-      <Section title="Readings" desc={selBatch ? `Targets from ${profile?.name ?? "default lettuce"} profile.` : "Default lettuce targets. Choose a batch to use its crop profile."}>
+      <Section title="Readings" desc={`${profile?.name ?? "Default lettuce"} · ${STAGE_LABELS[stage]} targets`}>
+        <div className="mb-4 max-w-sm"><Label>Growth stage</Label><Select value={stage} onValueChange={(v) => up("growth_stage", v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{STAGES.map((x) => <SelectItem key={x} value={x}>{STAGE_LABELS[x]}</SelectItem>)}</SelectContent></Select></div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {reading("ec", "EC (mS/cm)", t.ec_min, t.ec_max)}
           {reading("ph", "pH", t.ph_min, t.ph_max)}
@@ -313,7 +322,7 @@ function CheckPage() {
           {reading("air_temp", "Greenhouse temp (°C)", t.air_temp_min, t.air_temp_max)}
           {reading("humidity", "Humidity (%)", t.humidity_min, t.humidity_max)}
         </div>
-        <DosingPanel ec={num(f.ec)} ph={num(f.ph)} airTemp={num(f.air_temp)} humidity={num(f.humidity)} t={t} />
+        <DosingPanel ec={num(f.ec)} ph={num(f.ph)} airTemp={num(f.air_temp)} humidity={num(f.humidity)} t={t} tankLevel={f.tank_level} actualLiters={num(f.tank_liters_actual)} />
       </Section>
 
       <Section title="System & safety">
@@ -339,11 +348,12 @@ function CheckPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {growth.map((g, i) => {
             const set = (k: "h" | "l" | "v", val: string) => setGrowth((x) => x.map((y, j) => (j === i ? { ...y, [k]: val } : y)));
-            const p = prev[i]; const z = zoneOf(i + 1);
+            const p = prev[i]; const z = zone(i);
             const leaves = Number(g.l) || 0;
             return (
               <div key={i} className={cn("rounded-xl border-2 p-2", ZONE_STYLE[z])}>
                 <div className="mb-1 flex items-center justify-between text-xs font-bold"><span>#{i + 1}</span><span>{z}</span></div>
+                <Badge variant="outline" className="mb-2 bg-background">{selBatch?.sentinel_pot_ids[i] || "Pot unassigned"}</Badge>
                 <Input disabled={!f.batch_id} className="mb-1 h-9 bg-background text-xs" placeholder="Variety" value={g.v} onChange={(e) => set("v", e.target.value)} />
                 <Input disabled={!f.batch_id} className="h-11 bg-background" inputMode="decimal" placeholder="Height cm" type="number" step="0.1" value={g.h} onChange={(e) => set("h", e.target.value)} />
                 <div className="mt-1 flex items-center gap-1">
