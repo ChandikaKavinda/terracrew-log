@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -16,7 +17,7 @@ import { useProfiles, stageTargetsOf, stageOf } from "@/lib/crop-profiles";
 import { DEFAULT_SETTINGS, useFarmSettings } from "@/lib/agronomy";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard — GreenLog" }] }),
+  head: () => pageMeta("Dashboard — GreenLog", "View greenhouse readings, growth trends, quality and nursery seeding reminders."),
   component: Dashboard,
 });
 

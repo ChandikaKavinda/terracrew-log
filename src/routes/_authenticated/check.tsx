@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -22,7 +23,7 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/check")({
   validateSearch: (s: Record<string, unknown>): { edit?: string } => (typeof s["edit"] === "string" ? { edit: s["edit"] } : {}),
-  head: () => ({ meta: [{ title: "Daily checklist — GreenLog" }, { name: "description", content: "Quick-tap daily greenhouse walk-through." }] }),
+  head: () => pageMeta("Daily checklist — GreenLog", "Record crop-stage readings, tank volumes, fixed-pot growth and crop quality."),
   component: CheckPage,
 });
 

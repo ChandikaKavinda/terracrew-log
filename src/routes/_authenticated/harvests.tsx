@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -19,7 +20,7 @@ import { remainingPlants } from "@/lib/agronomy";
 import { usePopulation } from "@/lib/use-population";
 
 export const Route = createFileRoute("/_authenticated/harvests")({
-  head: () => ({ meta: [{ title: "Harvest & grading — GreenLog" }] }),
+  head: () => pageMeta("Harvest & grading — GreenLog", "Record harvests with crop-specific grading standards and track remaining plants."),
   component: HarvestPage,
 });
 

@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -15,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/_authenticated/profiles")({
-  head: () => ({ meta: [{ title: "Crop profiles — GreenLog" }, { name: "description", content: "Seasonal targets, grading standards and defect tags per crop." }] }),
+  head: () => pageMeta("Crop profiles — GreenLog", "Customize seasonal growth-stage targets, harvest standards and crop defect tags."),
   component: ProfilesPage,
 });
 

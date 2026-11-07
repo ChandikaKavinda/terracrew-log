@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -18,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toDateKey } from "@/lib/reminders";
 
 export const Route = createFileRoute("/_authenticated/batches")({
-  head: () => ({ meta: [{ title: "Batches — GreenLog" }] }),
+  head: () => pageMeta("Batches — GreenLog", "Track nursery batches, fixed sentinel pots, transplanting and plant losses."),
   component: BatchesPage,
 });
 

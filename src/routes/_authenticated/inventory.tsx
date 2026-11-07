@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -16,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toDateKey } from "@/lib/reminders";
 
 export const Route = createFileRoute("/_authenticated/inventory")({
-  head: () => ({ meta: [{ title: "Inventory — GreenLog" }] }),
+  head: () => pageMeta("Inventory — GreenLog", "Track greenhouse stock, usage, purchases and reorder levels."),
   component: InventoryPage,
 });
 

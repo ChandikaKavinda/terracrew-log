@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -17,7 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toDateKey } from "@/lib/reminders";
 
 export const Route = createFileRoute("/_authenticated/finance")({
-  head: () => ({ meta: [{ title: "Income & expenses — GreenLog" }] }),
+  head: () => pageMeta("Income & expenses — GreenLog", "Track greenhouse sales, costs, counterparties and batch finances."),
   component: FinancePage,
 });
 

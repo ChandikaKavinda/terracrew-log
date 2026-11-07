@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/page-meta";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -19,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export const Route = createFileRoute("/_authenticated/insights")({
-  head: () => ({ meta: [{ title: "Insights & planning — GreenLog" }, { name: "description", content: "Channel gradients, yield forecasts, cost per head and planting planner." }] }),
+  head: () => pageMeta("Insights & planning — GreenLog", "Plan nursery seeding, channel turnover and harvest forecasts with live plant counts."),
   component: InsightsPage,
 });
 
