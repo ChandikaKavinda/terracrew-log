@@ -1,6 +1,3 @@
-- [x] Profile selector and dynamic harvest standards/fields.
-- [x] Nursery timeline correction and automated in-app seeding prompts.
-- [x] Tank-level-scaled dosing and profile-specific growth stages.
-- [x] Fixed pot assignments and badges using greenhouse IDs.
-- [x] Cull/mortality records, live counts, and automatic harvest completion.
-- [x] Rule tests and signed-in desktop/mobile verification.
+- [ ] Add persistent pot allocations with date-overlap protection.
+- [ ] Build nine-set interactive greenhouse map and channel turnover schedule.
+- [ ] Connect navigation and test assignment, editing, release and mobile layout.
