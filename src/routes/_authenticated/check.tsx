@@ -341,7 +341,7 @@ function CheckPage() {
         </div>
       </Section>
 
-      <Section title="Sentinel plants — 10 fixed plants by channel zone" desc={f.batch_id ? "Plants 1–3 Inlet · 4–7 Mid · 8–10 Outlet. Previous values are filled in — change what grew." : "Choose a growing batch above to record growth."}>
+      <Section title="Sentinel plants — 10 fixed plants by channel zone" desc={f.batch_id ? "Assigned pots: 1–3 Inlet · 4–7 Mid · 8–10 Outlet. Unassigned plants use their sample number." : "Choose a crop batch above to record growth."}>
         <div className="mb-3 flex flex-wrap gap-2 text-xs">
           {(["Inlet", "Mid", "Outlet"] as Zone[]).map((z) => <Badge key={z} variant="outline" className={cn("px-3 py-1", ZONE_STYLE[z])}>{z} avg height: {zoneAvg(z)} cm</Badge>)}
         </div>
@@ -351,7 +351,7 @@ function CheckPage() {
             const p = prev[i]; const z = zone(i);
             const leaves = Number(g.l) || 0;
             return (
-              <div key={i} className={cn("rounded-xl border-2 p-2", ZONE_STYLE[z])}>
+              <div key={i} className={cn("min-w-0 rounded-xl border-2 p-2", ZONE_STYLE[z])}>
                 <div className="mb-1 flex items-center justify-between text-xs font-bold"><span>#{i + 1}</span><span>{z}</span></div>
                 <Badge variant="outline" className="mb-2 bg-background">{selBatch?.sentinel_pot_ids[i] || "Pot unassigned"}</Badge>
                 <Input disabled={!f.batch_id} className="mb-1 h-9 bg-background text-xs" placeholder="Variety" value={g.v} onChange={(e) => set("v", e.target.value)} />

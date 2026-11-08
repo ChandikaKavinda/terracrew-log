@@ -76,7 +76,7 @@ function Shell() {
         </div>
       </aside>
       {open && <div className="fixed inset-0 z-30 bg-foreground/30 md:hidden" onClick={() => setOpen(false)} />}
-      <div className="flex-1 md:ml-64">
+      <div className="min-w-0 flex-1 md:ml-64">
         <div className="flex items-center gap-2 border-b px-4 py-3 md:hidden">
           <Button variant="ghost" size="icon" onClick={() => setOpen(true)}><Menu /></Button>
           <span className="font-display font-bold text-primary">GreenLog</span>

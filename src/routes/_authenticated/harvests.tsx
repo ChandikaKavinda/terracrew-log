@@ -76,7 +76,7 @@ function HarvestPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={prof ? `Harvest & grading · ${prof.crop}` : "Harvest & grading"} sub={isBrix(prof)
+      <PageHeader title={prof ? `Harvest & grading · ${prof.crop}` : "Harvest & grading"} sub={!prof ? "Select a crop profile or batch." : isBrix(prof)
         ? `${prof?.name} grades — A: ≥${t.grade_a_min_g} g & ≥${prof?.grade_a_min_brix ?? "?"}° Brix · B: ≥${t.grade_b_min_g} g & ≥${prof?.grade_b_min_brix ?? "?"}° Brix · C: below B.`
         : `${prof ? prof.name : "Default"} grades — A: ≥${t.grade_a_min_g} g & ≥${t.grade_a_min_leaves} leaves · B: ≥${t.grade_b_min_g} g${t.grade_b_min_leaves ? ` & ≥${t.grade_b_min_leaves} leaves` : ""} · C: below B. Pick a batch to see its profile.`} />
       <section className="border-y py-5">
