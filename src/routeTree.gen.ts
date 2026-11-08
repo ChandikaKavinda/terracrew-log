@@ -16,6 +16,7 @@ import { Route as AuthenticatedBatchesRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedCheckRouteImport } from './routes/_authenticated/check'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedFinanceRouteImport } from './routes/_authenticated/finance'
+import { Route as AuthenticatedGreenhouseRouteImport } from './routes/_authenticated/greenhouse'
 import { Route as AuthenticatedHarvestsRouteImport } from './routes/_authenticated/harvests'
 import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
 import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
@@ -56,6 +57,11 @@ const AuthenticatedFinanceRoute = AuthenticatedFinanceRouteImport.update({
   path: '/finance',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedGreenhouseRoute = AuthenticatedGreenhouseRouteImport.update({
+  id: '/greenhouse',
+  path: '/greenhouse',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedHarvestsRoute = AuthenticatedHarvestsRouteImport.update({
   id: '/harvests',
   path: '/harvests',
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/check': typeof AuthenticatedCheckRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/finance': typeof AuthenticatedFinanceRoute
+  '/greenhouse': typeof AuthenticatedGreenhouseRoute
   '/harvests': typeof AuthenticatedHarvestsRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/inventory': typeof AuthenticatedInventoryRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/check': typeof AuthenticatedCheckRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/finance': typeof AuthenticatedFinanceRoute
+  '/greenhouse': typeof AuthenticatedGreenhouseRoute
   '/harvests': typeof AuthenticatedHarvestsRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/inventory': typeof AuthenticatedInventoryRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/_authenticated/check': typeof AuthenticatedCheckRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/finance': typeof AuthenticatedFinanceRoute
+  '/_authenticated/greenhouse': typeof AuthenticatedGreenhouseRoute
   '/_authenticated/harvests': typeof AuthenticatedHarvestsRoute
   '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
@@ -132,6 +141,7 @@ export interface FileRouteTypes {
     | '/check'
     | '/dashboard'
     | '/finance'
+    | '/greenhouse'
     | '/harvests'
     | '/insights'
     | '/inventory'
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
     | '/check'
     | '/dashboard'
     | '/finance'
+    | '/greenhouse'
     | '/harvests'
     | '/insights'
     | '/inventory'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '/_authenticated/check'
     | '/_authenticated/dashboard'
     | '/_authenticated/finance'
+    | '/_authenticated/greenhouse'
     | '/_authenticated/harvests'
     | '/_authenticated/insights'
     | '/_authenticated/inventory'
@@ -223,6 +235,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFinanceRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/greenhouse': {
+      id: '/_authenticated/greenhouse'
+      path: '/greenhouse'
+      fullPath: '/greenhouse'
+      preLoaderRoute: typeof AuthenticatedGreenhouseRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/harvests': {
       id: '/_authenticated/harvests'
       path: '/harvests'
@@ -266,6 +285,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCheckRoute: typeof AuthenticatedCheckRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedFinanceRoute: typeof AuthenticatedFinanceRoute
+  AuthenticatedGreenhouseRoute: typeof AuthenticatedGreenhouseRoute
   AuthenticatedHarvestsRoute: typeof AuthenticatedHarvestsRoute
   AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedInventoryRoute: typeof AuthenticatedInventoryRoute
@@ -278,6 +298,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCheckRoute: AuthenticatedCheckRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedFinanceRoute: AuthenticatedFinanceRoute,
+  AuthenticatedGreenhouseRoute: AuthenticatedGreenhouseRoute,
   AuthenticatedHarvestsRoute: AuthenticatedHarvestsRoute,
   AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedInventoryRoute: AuthenticatedInventoryRoute,

@@ -36,6 +36,13 @@
       "when": 1794019931528,
       "tag": "0004_growth_stages_pots_and_batch_losses",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794141135131,
+      "tag": "0005_greenhouse_pot_allocations",
+      "breakpoints": true
     }
   ]
 }

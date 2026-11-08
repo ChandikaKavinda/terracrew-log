@@ -13,3 +13,4 @@
 - Reconcile harvest completion with database triggers on harvests and batch_losses, locking the batch to reject over-removal atomically.
 - Store stage overrides on crop profiles and fixed sentinel pot assignments on batches; snapshot stage, volume, pot ID and zone with observations to preserve recorded context.
 - Derive in-app nursery seeding prompts from release dates and existing nursery supply rather than creating unrequested batches or recurring jobs.
+- Persist physical placements as dated per-pot allocation rows grouped by allocation ID; half-open date intervals and a database exclusion constraint prevent double booking, while an RPC replaces a group atomically. Placement release dates are explicit and independent of population records.
