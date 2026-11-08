@@ -584,6 +584,47 @@ export type Database = {
         }
         Relationships: []
       }
+      pot_allocations: {
+        Row: {
+          allocation_id: string
+          batch_id: string
+          created_at: string
+          created_by: string | null
+          ends_on: string
+          id: string
+          pot_id: string
+          starts_on: string
+        }
+        Insert: {
+          allocation_id: string
+          batch_id: string
+          created_at?: string
+          created_by?: string | null
+          ends_on: string
+          id?: string
+          pot_id: string
+          starts_on: string
+        }
+        Update: {
+          allocation_id?: string
+          batch_id?: string
+          created_at?: string
+          created_by?: string | null
+          ends_on?: string
+          id?: string
+          pot_id?: string
+          starts_on?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pot_allocations_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -772,6 +813,16 @@ export type Database = {
           _notes: string
           _qty: number
           _vendor: string
+        }
+        Returns: string
+      }
+      save_pot_allocation: {
+        Args: {
+          _allocation_id: string
+          _batch_id: string
+          _ends_on: string
+          _pot_ids: string[]
+          _starts_on: string
         }
         Returns: string
       }
