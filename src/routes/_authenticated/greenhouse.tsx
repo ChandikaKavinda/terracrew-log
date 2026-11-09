@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ArrowDown, CalendarDays, Check, Map, Pencil, Plus, Sprout, Trash2, X } from "lucide-react";
+import { ArrowDown, CalendarDays, Check, Map as MapIcon, Pencil, Plus, Sprout, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { pageMeta } from "@/lib/page-meta";
@@ -68,7 +68,7 @@ function GreenhousePage() {
     if (!start || !end || end <= start) { toast.error("Available date must be after planting date"); return; }
     if (conflicts(selected, placements, start, end, editing).length) { toast.error("Some pots are already booked for these dates"); return; }
     setBusy(true);
-    const { error } = await supabase.rpc("save_pot_allocation", { _allocation_id: editing || undefined, _batch_id: bid, _pot_ids: selected, _starts_on: start, _ends_on: end });
+    const { error } = await supabase.rpc("save_pot_allocation", { _allocation_id: editing || crypto.randomUUID(), _batch_id: bid, _pot_ids: selected, _starts_on: start, _ends_on: end });
     setBusy(false);
     if (error) { toast.error(error.code === "23P01" ? "Another booking overlaps these pots. Refresh and choose different dates." : error.message); return; }
     await qc.invalidateQueries({ queryKey: ["pot_allocations"] }); setEditor(false); toast.success("Pot assignment saved");
@@ -85,7 +85,7 @@ function GreenhousePage() {
       {[["Occupied pots",occupiedCount],["Free pots",510-occupiedCount],["Booked later",new Set(placements.filter((p)=>p.starts_on>date).map((p)=>p.pot_id)).size],["Operating capacity",settings.total_slots]].map(([label,value])=><div key={label}><div className="text-xs text-muted-foreground">{label}</div><div className="font-display text-3xl font-bold">{value}</div></div>)}
     </div>
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div className="flex gap-1"><Button variant={view==="map"?"default":"outline"} onClick={()=>setView("map")}><Map className="size-4"/> Bed map</Button><Button variant={view==="turnover"?"default":"outline"} onClick={()=>setView("turnover")}><CalendarDays className="size-4"/> Turnover</Button></div>
+      <div className="flex gap-1"><Button variant={view==="map"?"default":"outline"} onClick={()=>setView("map")}><MapIcon className="size-4"/> Bed map</Button><Button variant={view==="turnover"?"default":"outline"} onClick={()=>setView("turnover")}><CalendarDays className="size-4"/> Turnover</Button></div>
       <div className="flex flex-wrap items-end gap-3"><div><Label htmlFor="map-date">On date</Label><Input id="map-date" type="date" value={date} onChange={(e)=>e.target.value&&setDate(e.target.value)} /></div><Select value={batchFilter} onValueChange={setBatchFilter}><SelectTrigger className="w-44"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">All batches</SelectItem>{batches.map((b)=><SelectItem key={b.id} value={b.id}>{b.code}</SelectItem>)}</SelectContent></Select></div>
     </div>
     {error && <p role="alert" className="text-destructive">Could not load pot assignments. <Button variant="outline" onClick={()=>qc.invalidateQueries({queryKey:["pot_allocations"]})}>Retry</Button></p>}
