@@ -5,7 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBatches, useMe } from "@/lib/use-me";
-import { useProfiles, validPotId } from "@/lib/crop-profiles";
+import { useProfiles } from "@/lib/crop-profiles";
 import { remainingPlants } from "@/lib/agronomy";
 import { usePopulation } from "@/lib/use-population";
 import { deleteRow, updateRow } from "@/lib/db-actions";
@@ -34,7 +34,6 @@ function BatchesPage() {
   const [f, setF] = useState({ code: "", crop: "Lettuce", variety: "", seeded_on: toDateKey(new Date()), seeds_sown: "", expected_harvest: "", profile_id: "" });
   const [editBatch, setEditBatch] = useState<(typeof batches)[number] | null>(null);
   const { data: population } = usePopulation();
-  const [pots, setPots] = useState<string[]>(Array(10).fill(""));
   const [lossBatch, setLossBatch] = useState<(typeof batches)[number] | null>(null);
   const [editLoss, setEditLoss] = useState<NonNullable<typeof population>["losses"][number] | null>(null);
   const lossFields: Field[] = [{ key: "lost_on", label: "Date", type: "date" }, { key: "kind", label: "Type", type: "select", options: [{ value: "cull", label: "Cull" }, { value: "mortality", label: "Mortality" }] }, { key: "quantity", label: "Plants removed", type: "number" }, { key: "reason", label: "Reason", full: true }];
@@ -121,7 +120,7 @@ function BatchesPage() {
                 </div>
                 <div className="flex items-center">
                   <Badge variant={b.status === "harvested" ? "secondary" : "default"} className="mr-1 capitalize">{b.status}</Badge>
-                  <EditButton onClick={() => { setEditBatch(b); setPots(Array.from({ length: 10 }, (_, i) => b.sentinel_pot_ids[i] ?? "")); }} />
+                  <EditButton onClick={() => setEditBatch(b)} />
                   <DeleteButton what={`batch ${b.code} and all its growth, quality and harvest records`} disabled={!me?.isOwner} onConfirm={async () => { const e = await deleteRow("batches", b.id); qc.invalidateQueries(); return e; }} />
                 </div>
               </div>
@@ -137,7 +136,6 @@ function BatchesPage() {
                 <dt className="text-muted-foreground">Harvested</dt><dd>{b.harvested_on ?? (b.expected_harvest ? `exp. ${b.expected_harvest}` : "—")}</dd>
                 <dt className="text-muted-foreground">Age</dt><dd>{daysBetween(b.seeded_on, b.harvested_on)} days</dd>
               </dl>
-              <div className="mt-3 flex flex-wrap gap-1">{b.sentinel_pot_ids.filter(Boolean).map((pot) => <Badge key={pot} variant="outline">{pot}</Badge>)}</div>
               {b.status === "growing" && <Button variant="outline" size="sm" className="mt-3 w-full" onClick={() => { setEditLoss(null); setLossBatch(b); }}>Record cull / mortality</Button>}
               {b.status !== "harvested" && (
                 <Button variant="outline" size="sm" className="mt-4 w-full" onClick={() => advance(b)}>
@@ -166,16 +164,12 @@ function BatchesPage() {
       <FieldsDialog
         open={!!editBatch} onOpenChange={(o) => !o && setEditBatch(null)} title={`Edit batch ${editBatch?.code ?? ""}`}
         fields={batchFields} initial={editBatch ? toVals(editBatch, batchFields) : {}}
-        extra={<div><h3 className="mb-2 font-semibold">Fixed sentinel pot IDs</h3><div className="grid grid-cols-2 gap-3 sm:grid-cols-5">{pots.map((pot, i) => <div key={i}><Label htmlFor={`pot-${i}`}>Plant #{i + 1}</Label><Input id={`pot-${i}`} placeholder="e.g. 1A1" value={pot} onChange={(e) => setPots((x) => x.map((p,j) => j === i ? e.target.value.toUpperCase().trim() : p))} /></div>)}</div><p className="mt-2 text-xs text-muted-foreground">Sets 1–9 · A–E (A–H in sets 5 & 8) · pots 1–10. Blank means unassigned.</p></div>}
         onSave={async (v) => {
           if (!editBatch) return null;
           const patch = fromVals(v, batchFields);
           if (!patch["code"]) return "Code is required";
           if (!patch["crop"]) patch["crop"] = "Lettuce";
-          const assigned = pots.filter(Boolean);
-          if (assigned.some((id) => !validPotId(id))) return "Invalid pot ID; use IDs such as 1A1 or 8H10";
-          if (new Set(assigned).size !== assigned.length) return "Each sentinel must have a different pot ID";
-          const e = await updateRow("batches", editBatch.id, { ...patch, sentinel_pot_ids: pots });
+          const e = await updateRow("batches", editBatch.id, patch);
           if (!e) { toast.success("Batch updated"); refresh(); }
           return e;
         }}
