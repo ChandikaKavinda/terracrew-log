@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toDateKey } from "@/lib/reminders";
+import { fetchPreviousGrowth } from "@/lib/growth-autofill";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/check")({
@@ -180,7 +181,7 @@ function CheckPage() {
   const { data: lastGrowth } = useQuery({
     queryKey: ["growth-prev", f.batch_id, f.check_date],
     enabled: !!f.batch_id,
-    queryFn: async () => (await supabase.from("growth_measurements").select("*").eq("batch_id", f.batch_id).lt("measured_on", f.check_date).order("measured_on", { ascending: false }).limit(100)).data ?? [],
+    queryFn: () => fetchPreviousGrowth(supabase.from("growth_measurements").select("*"), f.batch_id, f.check_date),
   });
   useEffect(() => {
     if (!f.batch_id) return;
