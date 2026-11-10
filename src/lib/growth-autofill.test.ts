@@ -78,8 +78,8 @@ describe("Sentinel growth autofill", () => {
     const rows = await fetchPreviousGrowth(chain, "batch-1", "2026-11-10");
 
     expect(rows).toHaveLength(1);
-    expect(rows[0].height_cm).toBe(6.5);
-    expect(rows[0].leaf_count).toBe(10);
+    expect(rows[0]?.height_cm).toBe(6.5);
+    expect(rows[0]?.leaf_count).toBe(10);
   });
 
   it("orders newest first by date, then by submission time", async () => {
