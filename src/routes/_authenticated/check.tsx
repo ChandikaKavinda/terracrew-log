@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Minus, Plus, RotateCcw } from "lucide-react";
-import { useProfiles, stageTargetsOf, stageOf, STAGES, STAGE_LABELS, inRange, GERMINATION_ISSUES, potZone, defectTagsOf, type Zone, type GrowthStage } from "@/lib/crop-profiles";
+import { useProfiles, stageTargetsOf, stageOf, STAGES, STAGE_LABELS, inRange, GERMINATION_ISSUES, potZone, validPotId, defectTagsOf, type Zone, type GrowthStage } from "@/lib/crop-profiles";
 import { DEFAULT_SETTINGS, effectiveTankLiters, useFarmSettings } from "@/lib/agronomy";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -112,7 +112,7 @@ function CheckPage() {
   const nursery = batches.filter((b) => b.status === "nursery");
 
   const [f, setF] = useState(emptyForm);
-  const [growth, setGrowth] = useState(Array.from({ length: 10 }, () => ({ h: "", l: "", v: "" })));
+  const [growth, setGrowth] = useState(Array.from({ length: 10 }, () => ({ h: "", l: "", v: "", pot: "" })));
   const [prev, setPrev] = useState<({ h: number | null; l: number | null } | null)[]>([]);
   const [issues, setIssues] = useState<string[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -128,7 +128,7 @@ function CheckPage() {
   const profile = profiles.find((p) => p.id === selBatch?.profile_id);
   const stage = (f.growth_stage || stageOf(selBatch?.status, selBatch?.transplanted_on, f.check_date, settings.grow_days)) as GrowthStage;
   const t = stageTargetsOf(profile, stage);
-  const zone = (i: number) => potZone(selBatch?.sentinel_pot_ids[i] ?? "", i + 1);
+  const zone = (i: number) => potZone(validPotId(growth[i]?.pot ?? "") ? growth[i]!.pot : "", i + 1);
   const tags = defectTagsOf(profile);
   const up = <K extends keyof ReturnType<typeof emptyForm>>(k: K, v: ReturnType<typeof emptyForm>[K]) => setF((x) => ({ ...x, [k]: v }));
 
@@ -163,7 +163,7 @@ function CheckPage() {
     setGerm({ batch_id: c.nursery_batch_id ?? "", germinated: s(c.germinated_count), notes: c.germination_notes ?? "" });
     setGrowth(Array.from({ length: 10 }, (_, i) => {
       const r = editData.growth.find((x) => x.plant_no === i + 1);
-      return { h: s(r?.height_cm), l: s(r?.leaf_count), v: r?.variety ?? "" };
+      return { h: s(r?.height_cm), l: s(r?.leaf_count), v: r?.variety ?? "", pot: r?.pot_id ?? "" };
     }));
     const q = editData.quality;
     const dc = (q?.defect_counts ?? {}) as Record<string, number>;
@@ -187,17 +187,20 @@ function CheckPage() {
     const rows = lastGrowth ?? [];
     const p = Array.from({ length: 10 }, (_, i) => {
       const r = rows.find((x) => x.plant_no === i + 1);
-      return r ? { h: r.height_cm, l: r.leaf_count, v: r.variety } : null;
+      return r ? { h: r.height_cm, l: r.leaf_count, v: r.variety, pot: r.pot_id } : null;
     });
     setPrev(p);
     if (edit) return; // keep the saved values when editing
-    setGrowth(p.map((x) => ({ h: x?.h != null ? String(x.h) : "", l: x?.l != null ? String(x.l) : "", v: x?.v ?? selBatch?.variety ?? "" })));
+    setGrowth(p.map((x) => ({ h: x?.h != null ? String(x.h) : "", l: x?.l != null ? String(x.l) : "", v: x?.v ?? selBatch?.variety ?? "", pot: x?.pot ?? "" })));
   }, [lastGrowth, f.batch_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const defective = Object.entries(counts).filter(([k]) => tags.includes(k)).reduce((a, [, v]) => a + (v || 0), 0);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const pots = growth.map((g) => g.pot).filter(Boolean);
+    if (pots.some((x) => !validPotId(x))) { toast.error("Invalid pot ID; use IDs such as 1A1 or 8H10"); return; }
+    if (new Set(pots).size !== pots.length) { toast.error("Each sentinel plant needs a different pot ID"); return; }
     if (defective > SAMPLE) { toast.error(`Defect counts add up to more than ${SAMPLE} plants.`); return; }
     const phV = num(f.ph);
     if (phV !== null && (phV < 0 || phV > 14)) { toast.error("pH must be between 0 and 14."); return; }
@@ -229,7 +232,7 @@ function CheckPage() {
 
       if (f.batch_id) {
         const rows = growth
-          .map((g, i) => ({ batch_id: f.batch_id, check_id: checkId, plant_no: i + 1, zone: zone(i), pot_id: selBatch?.sentinel_pot_ids[i] || null, variety: g.v || null, measured_on: f.check_date, height_cm: num(g.h), leaf_count: g.l ? Math.round(Number(g.l)) : null }))
+          .map((g, i) => ({ batch_id: f.batch_id, check_id: checkId, plant_no: i + 1, zone: zone(i), pot_id: g.pot || null, variety: g.v || null, measured_on: f.check_date, height_cm: num(g.h), leaf_count: g.l ? Math.round(Number(g.l)) : null }))
           .filter((r) => r.height_cm !== null || r.leaf_count !== null);
         if (rows.length) {
           const { error: ge } = await supabase.from("growth_measurements").upsert(rows, { onConflict: "batch_id,plant_no,measured_on" });
@@ -347,13 +350,13 @@ function CheckPage() {
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {growth.map((g, i) => {
-            const set = (k: "h" | "l" | "v", val: string) => setGrowth((x) => x.map((y, j) => (j === i ? { ...y, [k]: val } : y)));
+            const set = (k: "h" | "l" | "v" | "pot", val: string) => setGrowth((x) => x.map((y, j) => (j === i ? { ...y, [k]: val } : y)));
             const p = prev[i]; const z = zone(i);
             const leaves = Number(g.l) || 0;
             return (
               <div key={i} className={cn("min-w-0 rounded-xl border-2 p-2", ZONE_STYLE[z])}>
                 <div className="mb-1 flex items-center justify-between text-xs font-bold"><span>#{i + 1}</span><span>{z}</span></div>
-                <Badge variant="outline" className="mb-2 bg-background">{selBatch?.sentinel_pot_ids[i] || "Pot unassigned"}</Badge>
+                <Input disabled={!f.batch_id} aria-label={`Pot ID for plant ${i + 1}`} className={cn("mb-1 h-9 bg-background text-xs font-semibold uppercase", g.pot && !validPotId(g.pot) && "border-destructive")} placeholder="Pot ID e.g. 1A1" value={g.pot} onChange={(e) => set("pot", e.target.value.toUpperCase().replace(/\s/g, ""))} />
                 <Input disabled={!f.batch_id} className="mb-1 h-9 bg-background text-xs" placeholder="Variety" value={g.v} onChange={(e) => set("v", e.target.value)} />
                 <Input disabled={!f.batch_id} className="h-11 bg-background" inputMode="decimal" placeholder="Height cm" type="number" step="0.1" value={g.h} onChange={(e) => set("h", e.target.value)} />
                 <div className="mt-1 flex items-center gap-1">
