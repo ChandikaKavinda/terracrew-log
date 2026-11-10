@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toDateKey } from "@/lib/reminders";
 
 export const Route = createFileRoute("/_authenticated/batches")({
-  head: () => pageMeta("Batches — GreenLog", "Track nursery batches, fixed sentinel pots, transplanting and plant losses."),
+  head: () => pageMeta("Batches — GreenLog", "Track nursery batches, transplanting and plant losses."),
   component: BatchesPage,
 });
 
