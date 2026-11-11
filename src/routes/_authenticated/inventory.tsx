@@ -54,6 +54,11 @@ function InventoryPage() {
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("All");
   const [dlg, setDlg] = useState<{ kind: "new" | "edit" | "buy" | "use"; item?: Item } | null>(null);
+  const [mv, setMv] = useState<{ id: string; change: number; reason: string | null; item_id: string } | null>(null);
+  const moveFields: Field[] = [
+    { key: "change", label: "Change (+ added, − used)", type: "number" },
+    { key: "reason", label: "Reason", full: true },
+  ];
 
   const refresh = () => ["inventory", "inventory-moves", "dashboard", "transactions", "fin-summary"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
@@ -150,15 +155,32 @@ function InventoryPage() {
       <Section title="Recent movements">
         <ul className="space-y-1 text-sm">
           {moves.map((m) => (
-            <li key={m.id} className="flex justify-between gap-2 border-b py-1">
+            <li key={m.id} className="flex items-center justify-between gap-2 border-b py-1">
               <span>{m.inventory_items?.name} · {m.reason}</span>
-              <span className={`whitespace-nowrap ${Number(m.change) < 0 ? "text-destructive" : "text-success"}`}>{Number(m.change) > 0 ? "+" : ""}{Number(m.change)} {m.inventory_items?.unit} · {new Date(m.created_at).toLocaleDateString()}</span>
+              <span className={`whitespace-nowrap ${Number(m.change) < 0 ? "text-destructive" : "text-success"}`}>{Number(m.change) > 0 ? "+" : ""}{Number(m.change)} {m.inventory_items?.unit} · {new Date(m.created_at).toLocaleDateString()}
+                <EditButton onClick={() => setMv(m)} />
+                <DeleteButton what="this movement" disabled={!me?.isOwner} onConfirm={async () => { const e = await deleteRow("inventory_movements", m.id); refresh(); return e; }} />
+              </span>
             </li>
           ))}
           {!moves.length && <li className="text-muted-foreground">Nothing yet.</li>}
         </ul>
       </Section>
 
+      <FieldsDialog
+        open={!!mv} onOpenChange={(o) => !o && setMv(null)} title="Edit movement" fields={moveFields}
+        initial={mv ? { change: String(Number(mv.change)), reason: mv.reason ?? "" } : {}}
+        extra={<p className="text-xs text-muted-foreground">Stock is adjusted automatically. Linked expenses are not changed.</p>}
+        onSave={async (v) => {
+          const p = fromVals(v, moveFields);
+          const c = p["change"] as number;
+          if (!mv) return null;
+          if (!c) return "Enter a non-zero amount";
+          const e = await updateRow("inventory_movements", mv.id, { change: c, reason: ((p["reason"] as string) ?? "").slice(0, 200) });
+          if (e) return e;
+          toast.success("Movement updated"); refresh(); return null;
+        }}
+      />
       <FieldsDialog
         open={dlg?.kind === "new" || dlg?.kind === "edit"} onOpenChange={(o) => !o && setDlg(null)}
         title={dlg?.kind === "edit" ? `Edit ${dlg.item?.name}` : "New item"} fields={itemFields}
