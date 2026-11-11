@@ -1,3 +1,3 @@
 - [x] Add persistent pot allocations with date-overlap protection.
 - [x] Build nine-set interactive greenhouse map and channel turnover schedule.
-- [x] Connect navigation and test assignment, editing, release and mobile layout.
+- [x] Connect navigation and test assignment, editing, release and mobile layout.- [x] Transplant dialog: partial split, bed allocation, auto sentinels, checklist prefill.

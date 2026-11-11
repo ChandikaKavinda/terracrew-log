@@ -66,6 +66,7 @@ export type Database = {
           harvested_on: string | null
           id: string
           notes: string | null
+          parent_batch_id: string | null
           plant_count: number | null
           profile_id: string | null
           seeded_on: string
@@ -85,6 +86,7 @@ export type Database = {
           harvested_on?: string | null
           id?: string
           notes?: string | null
+          parent_batch_id?: string | null
           plant_count?: number | null
           profile_id?: string | null
           seeded_on?: string
@@ -104,6 +106,7 @@ export type Database = {
           harvested_on?: string | null
           id?: string
           notes?: string | null
+          parent_batch_id?: string | null
           plant_count?: number | null
           profile_id?: string | null
           seeded_on?: string
@@ -114,6 +117,13 @@ export type Database = {
           variety?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "batches_parent_batch_id_fkey"
+            columns: ["parent_batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "batches_profile_id_fkey"
             columns: ["profile_id"]
@@ -823,6 +833,17 @@ export type Database = {
           _ends_on: string
           _pot_ids: string[]
           _starts_on: string
+        }
+        Returns: string
+      }
+      transplant_batch: {
+        Args: {
+          _batch_id: string
+          _ends_on: string
+          _on: string
+          _pot_ids: string[]
+          _qty: number
+          _sentinels: string[]
         }
         Returns: string
       }

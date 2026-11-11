@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toDateKey } from "@/lib/reminders";
+import { TransplantDialog } from "@/components/transplant-dialog";
 
 export const Route = createFileRoute("/_authenticated/batches")({
   head: () => pageMeta("Batches — GreenLog", "Track nursery batches, transplanting and plant losses."),
@@ -38,6 +39,8 @@ function BatchesPage() {
   const [editLoss, setEditLoss] = useState<NonNullable<typeof population>["losses"][number] | null>(null);
   const lossFields: Field[] = [{ key: "lost_on", label: "Date", type: "date" }, { key: "kind", label: "Type", type: "select", options: [{ value: "cull", label: "Cull" }, { value: "mortality", label: "Mortality" }] }, { key: "quantity", label: "Plants removed", type: "number" }, { key: "reason", label: "Reason", full: true }];
 
+  const [moving, setMoving] = useState<(typeof batches)[number] | null>(null);
+  const nurseryLeft = (b: (typeof batches)[number]) => Math.max(0, (b.germinated ?? b.seeds_sown ?? 0) - batches.filter((c) => c.parent_batch_id === b.id).reduce((a, c) => a + (c.plant_count ?? 0), 0));
   const refresh = () => { qc.invalidateQueries(); };
   const profileName = (id: string | null) => profiles.find((p) => p.id === id)?.name;
 
@@ -69,12 +72,8 @@ function BatchesPage() {
   async function advance(b: (typeof batches)[number]) {
     const today = toDateKey(new Date());
     let patch: Record<string, unknown> = {};
-    if (b.status === "nursery") {
-      const n = prompt("How many plants are being transplanted into the system?", String(b.germinated ?? ""));
-      if (n === null) return;
-      if (!Number.isInteger(Number(n)) || Number(n) <= 0) { toast.error("Enter a positive whole plant count"); return; }
-      patch = { status: "growing", transplanted_on: today, plant_count: Number(n) };
-    } else if (b.status === "growing") patch = { status: "harvested", harvested_on: today };
+    if (b.status === "nursery") { setMoving(b); return; }
+    else if (b.status === "growing") patch = { status: "harvested", harvested_on: today };
     const err = await updateRow("batches", b.id, patch);
     if (err) { toast.error(err); return; }
     refresh();
@@ -130,6 +129,7 @@ function BatchesPage() {
               <dl className="mt-4 grid grid-cols-2 gap-y-1 text-sm">
                 <dt className="text-muted-foreground">Seeded</dt><dd>{b.seeded_on}</dd>
                 <dt className="text-muted-foreground">Germination</dt><dd>{germ != null ? `${b.germinated}/${b.seeds_sown} (${germ}%)` : "—"}</dd>
+                {b.status === "nursery" && batches.some((c) => c.parent_batch_id === b.id) && <><dt className="text-muted-foreground">Left in nursery</dt><dd>{nurseryLeft(b)}</dd></>}
                 <dt className="text-muted-foreground">Transplanted</dt><dd>{b.transplanted_on ?? "—"}</dd>
                 <dt className="text-muted-foreground">Live plants</dt><dd>{remainingPlants(b, population?.harvested[b.id], population?.lost[b.id])} / {b.plant_count ?? b.germinated ?? b.seeds_sown ?? "—"}</dd>
                 <dt className="text-muted-foreground">Culled / died</dt><dd>{population?.lost[b.id] ?? 0}</dd>
@@ -139,7 +139,7 @@ function BatchesPage() {
               {b.status === "growing" && <Button variant="outline" size="sm" className="mt-3 w-full" onClick={() => { setEditLoss(null); setLossBatch(b); }}>Record cull / mortality</Button>}
               {b.status !== "harvested" && (
                 <Button variant="outline" size="sm" className="mt-4 w-full" onClick={() => advance(b)}>
-                  {b.status === "nursery" ? "Move to growing system" : "Mark harvested"}
+                  {b.status === "nursery" ? "Transplant to growing system" : "Mark harvested"}
                 </Button>
               )}
             </div>
@@ -161,6 +161,7 @@ function BatchesPage() {
         if (error) return error.message; refresh(); toast.success("Loss recorded"); return null;
       }} />
 
+      <TransplantDialog batch={moving} available={moving ? nurseryLeft(moving) : 0} onClose={() => setMoving(null)} />
       <FieldsDialog
         open={!!editBatch} onOpenChange={(o) => !o && setEditBatch(null)} title={`Edit batch ${editBatch?.code ?? ""}`}
         fields={batchFields} initial={editBatch ? toVals(editBatch, batchFields) : {}}
