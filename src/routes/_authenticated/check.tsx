@@ -192,7 +192,7 @@ function CheckPage() {
     });
     setPrev(p);
     if (edit) return; // keep the saved values when editing
-    setGrowth(p.map((x) => ({ h: x?.h != null ? String(x.h) : "", l: x?.l != null ? String(x.l) : "", v: x?.v ?? selBatch?.variety ?? "", pot: x?.pot ?? "" })));
+    setGrowth(p.map((x) => ({ h: x?.h != null ? String(x.h) : "", l: x?.l != null ? String(x.l) : "", v: x?.v ?? selBatch?.variety ?? "", pot: x?.pot ?? selBatch?.sentinel_pot_ids?.[i] ?? "" })));
   }, [lastGrowth, f.batch_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const defective = Object.entries(counts).filter(([k]) => tags.includes(k)).reduce((a, [, v]) => a + (v || 0), 0);
