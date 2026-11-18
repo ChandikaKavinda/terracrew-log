@@ -71,6 +71,13 @@
       "when": 1795020140239,
       "tag": "0009_growth_width",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795021375066,
+      "tag": "0010_capex_settings",
+      "breakpoints": true
     }
   ]
 }

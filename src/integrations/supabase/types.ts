@@ -337,6 +337,8 @@ export type Database = {
       farm_settings: {
         Row: {
           albert_ec_per_g_l: number
+          capex_years: number
+          cycles_per_year: number
           grow_days: number
           id: number
           kg_per_crate: number
@@ -344,6 +346,7 @@ export type Database = {
           ph_down_ml: number
           ph_up_ml: number
           tank_liters: number
+          target_margin_pct: number
           total_slots: number
           updated_at: string
           vpd_max: number
@@ -351,6 +354,8 @@ export type Database = {
         }
         Insert: {
           albert_ec_per_g_l?: number
+          capex_years?: number
+          cycles_per_year?: number
           grow_days?: number
           id?: number
           kg_per_crate?: number
@@ -358,6 +363,7 @@ export type Database = {
           ph_down_ml?: number
           ph_up_ml?: number
           tank_liters?: number
+          target_margin_pct?: number
           total_slots?: number
           updated_at?: string
           vpd_max?: number
@@ -365,6 +371,8 @@ export type Database = {
         }
         Update: {
           albert_ec_per_g_l?: number
+          capex_years?: number
+          cycles_per_year?: number
           grow_days?: number
           id?: number
           kg_per_crate?: number
@@ -372,6 +380,7 @@ export type Database = {
           ph_down_ml?: number
           ph_up_ml?: number
           tank_liters?: number
+          target_margin_pct?: number
           total_slots?: number
           updated_at?: string
           vpd_max?: number
@@ -514,27 +523,33 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          notes: string | null
           quantity: number
           reorder_level: number
           unit: string
+          unit_cost: number
         }
         Insert: {
           category?: string
           created_at?: string
           id?: string
           name: string
+          notes?: string | null
           quantity?: number
           reorder_level?: number
           unit?: string
+          unit_cost?: number
         }
         Update: {
           category?: string
           created_at?: string
           id?: string
           name?: string
+          notes?: string | null
           quantity?: number
           reorder_level?: number
           unit?: string
+          unit_cost?: number
         }
         Relationships: []
       }

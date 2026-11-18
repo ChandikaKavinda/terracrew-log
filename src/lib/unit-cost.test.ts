@@ -17,3 +17,10 @@ describe("simulateUnitCost", () => {
     expect(simulateUnitCost({ ...base, mortalityPct: 100 }).costPerKg).toBeNull();
   });
 });
+
+import { capexPerCycle, priceForMargin } from "./agronomy";
+describe("capital costs", () => {
+  it("spreads LKR 918,000 over 5 years × 10 cycles", () => expect(capexPerCycle(918000, 5, 10)).toBe(18360));
+  it("adds capex to total cost", () => expect(simulateUnitCost({ ...base, capexTotal: 918000, capexYears: 5, cyclesPerYear: 10 }).totalCost).toBe(simulateUnitCost(base).totalCost + 18360));
+  it("prices for a 25% margin", () => expect(priceForMargin(75, 25)).toBe(100));
+});

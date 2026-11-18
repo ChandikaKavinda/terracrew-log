@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/inventory")({
   component: InventoryPage,
 });
 
-const CATEGORIES = ["Nutrients", "Seeds", "Substrates", "Chemicals", "Packaging", "Equipment", "Spares", "Other"];
+const CATEGORIES = ["Nutrients", "Seeds", "Substrates", "Chemicals", "Packaging", "Equipment", "Spares", "Capital assets", "Other"];
 
 const itemFields: Field[] = [
   { key: "name", label: "Item name", full: true },
@@ -29,9 +29,11 @@ const itemFields: Field[] = [
   { key: "unit", label: "Unit (kg, L, packs…)" },
   { key: "quantity", label: "Quantity in stock", type: "number" },
   { key: "reorder_level", label: "Reorder when at or below", type: "number" },
+  { key: "unit_cost", label: "Unit cost / value (Rs)", type: "number" },
+  { key: "notes", label: "Specification / notes", full: true },
 ];
 
-type Item = { id: string; name: string; category: string; unit: string; quantity: number; reorder_level: number };
+type Item = { id: string; name: string; category: string; unit: string; quantity: number; reorder_level: number; unit_cost: number; notes: string | null };
 
 function status(i: Item) {
   const q = Number(i.quantity);
@@ -64,7 +66,7 @@ function InventoryPage() {
 
   const cats = useMemo(() => ["All", ...new Set([...CATEGORIES.filter((c) => items.some((i) => i.category === c)), ...items.map((i) => i.category)])], [items]);
   const shown = items.filter((i) => (cat === "All" || i.category === cat) && i.name.toLowerCase().includes(search.toLowerCase()));
-  const low = items.filter((i) => Number(i.quantity) <= Number(i.reorder_level)).length;
+  const low = items.filter((i) => i.category !== "Capital assets" && Number(i.quantity) <= Number(i.reorder_level)).length;
   const out = items.filter((i) => Number(i.quantity) <= 0).length;
 
   const itemOpts = items.map((i) => ({ value: i.id, label: `${i.name} (${i.unit})` }));
@@ -126,16 +128,17 @@ function InventoryPage() {
         </div>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Category</TableHead><TableHead>In stock</TableHead><TableHead>Reorder at</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Category</TableHead><TableHead>In stock</TableHead><TableHead>Reorder at</TableHead><TableHead>Value</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
             <TableBody>
               {shown.map((i) => {
                 const st = status(i);
                 return (
                   <TableRow key={i.id}>
-                    <TableCell className="font-medium">{i.name}</TableCell>
+                    <TableCell className="font-medium">{i.name}{i.notes && <div className="max-w-md text-xs font-normal text-muted-foreground">{i.notes}</div>}</TableCell>
                     <TableCell>{i.category}</TableCell>
                     <TableCell>{Number(i.quantity)} {i.unit}</TableCell>
                     <TableCell>{Number(i.reorder_level)} {i.unit}</TableCell>
+                    <TableCell className="whitespace-nowrap">{Number(i.unit_cost) ? `Rs ${(Number(i.unit_cost) * Math.max(1, Number(i.quantity))).toLocaleString()}` : "—"}</TableCell>
                     <TableCell><Badge variant={st.v}>{st.label}</Badge></TableCell>
                     <TableCell className="whitespace-nowrap text-right">
                       <Button size="sm" variant="ghost" onClick={() => setDlg({ kind: "use", item: i })}>Use</Button>
@@ -184,11 +187,11 @@ function InventoryPage() {
       <FieldsDialog
         open={dlg?.kind === "new" || dlg?.kind === "edit"} onOpenChange={(o) => !o && setDlg(null)}
         title={dlg?.kind === "edit" ? `Edit ${dlg.item?.name}` : "New item"} fields={itemFields}
-        initial={dlg?.item ? toVals(dlg.item, itemFields) : { name: "", category: "Nutrients", unit: "kg", quantity: "0", reorder_level: "0" }}
+        initial={dlg?.item ? toVals(dlg.item, itemFields) : { name: "", category: "Nutrients", unit: "kg", quantity: "0", reorder_level: "0", unit_cost: "0", notes: "" }}
         onSave={async (v) => {
           const p = fromVals(v, itemFields);
           if (!p["name"]) return "Item name required";
-          const row = { name: String(p["name"]).slice(0, 100), category: (p["category"] as string) || "Other", unit: (p["unit"] as string) || "units", quantity: (p["quantity"] as number) ?? 0, reorder_level: (p["reorder_level"] as number) ?? 0 };
+          const row = { name: String(p["name"]).slice(0, 100), category: (p["category"] as string) || "Other", unit: (p["unit"] as string) || "units", quantity: (p["quantity"] as number) ?? 0, reorder_level: (p["reorder_level"] as number) ?? 0, unit_cost: (p["unit_cost"] as number) ?? 0, notes: ((p["notes"] as string) || "").slice(0, 1000) || null };
           if (dlg?.kind === "edit" && dlg.item) { const e = await updateRow("inventory_items", dlg.item.id, row); if (e) return e; }
           else { const { error } = await supabase.from("inventory_items").insert(row); if (error) return error.message; }
           toast.success("Item saved"); refresh(); return null;

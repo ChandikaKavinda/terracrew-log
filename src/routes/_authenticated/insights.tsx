@@ -7,7 +7,7 @@ import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContai
 import { supabase } from "@/integrations/supabase/client";
 import { useBatches, useMe, LKR } from "@/lib/use-me";
 import { useProfiles, targetsOf, potZone, isBrix, type Zone } from "@/lib/crop-profiles";
-import { DEFAULT_SETTINGS, dayNum, daysToTarget, harvestDay, remainingPlants, fromDayNum, shareCost, slope, useFarmSettings, type FarmSettings } from "@/lib/agronomy";
+import { DEFAULT_SETTINGS, dayNum, daysToTarget, harvestDay, remainingPlants, fromDayNum, shareCost, slope, capexPerCycle, priceForMargin, useFarmSettings, type FarmSettings } from "@/lib/agronomy";
 import { usePopulation } from "@/lib/use-population";
 import { SeedingPrompts } from "@/components/seeding-prompts";
 import { ProfitSimulator } from "@/components/profit-simulator";
@@ -66,7 +66,7 @@ function InsightsPage() {
       <SeedingPrompts />
       <Planner batches={liveBatches} s={s} />
       <ProfitSimulator />
-      {me?.isOwner && <Economics batches={batches} harvests={harvests} />}
+      {me?.isOwner && <Economics batches={batches} harvests={harvests} s={s} />}
       {me?.isOwner && <SettingsForm s={s} />}
     </div>
   );
@@ -241,17 +241,21 @@ function Planner({ batches, s }: { batches: B[]; s: FarmSettings }) {
   );
 }
 
-function Economics({ batches, harvests }: { batches: B[]; harvests: H[] }) {
+function Economics({ batches, harvests, s }: { batches: B[]; harvests: H[]; s: FarmSettings }) {
   const { data: tx = [] } = useQuery({ queryKey: ["transactions"], queryFn: async () => (await supabase.from("transactions").select("*").order("tx_date", { ascending: false })).data ?? [] });
   const rows = useMemo(() => {
     const cost: Record<string, number> = {}, direct: Record<string, number> = {}, income: Record<string, number> = {};
     const win = (b: B) => ({ a: b.seeded_on, z: b.harvested_on ?? today() });
+    const capexTotal = tx.filter((t) => t.kind === "expense" && t.category === "Capital equipment" && !t.batch_id).reduce((a, t) => a + Number(t.amount), 0);
+    const perCycle = capexPerCycle(capexTotal, s.capex_years, s.cycles_per_year);
+    const capex: Record<string, number> = {};
+    for (const b of batches) if (b.status !== "nursery") { const k = (b.plant_count ?? 0) / s.total_slots * perCycle; capex[b.id] = k; }
     for (const t of tx) {
       const amt = Number(t.amount);
       if (t.batch_id) {
         if (t.kind === "income") income[t.batch_id] = (income[t.batch_id] ?? 0) + amt;
         else { direct[t.batch_id] = (direct[t.batch_id] ?? 0) + amt; cost[t.batch_id] = (cost[t.batch_id] ?? 0) + amt; }
-      } else if (t.kind === "expense") {
+      } else if (t.kind === "expense" && t.category !== "Capital equipment") {
         const active: Record<string, number> = {};
         for (const b of batches) { const w = win(b); if (t.tx_date >= w.a && t.tx_date <= w.z) active[b.id] = b.plant_count ?? b.germinated ?? b.seeds_sown ?? 1; }
         for (const [k, v] of Object.entries(shareCost(amt, active))) cost[k] = (cost[k] ?? 0) + v;
@@ -261,25 +265,29 @@ function Economics({ batches, harvests }: { batches: B[]; harvests: H[] }) {
       const hs = harvests.filter((h) => h.batch_id === b.id);
       const harvested = hs.reduce((a, h) => a + h.plants_harvested - h.rejected, 0);
       const heads = harvested || b.plant_count || 0;
-      const c = cost[b.id] ?? 0, inc = income[b.id] ?? 0;
-      return { b, c, d: direct[b.id] ?? 0, inc, heads, projected: !harvested, perHead: heads ? c / heads : null };
+      const cx = capex[b.id] ?? 0;
+      const c = (cost[b.id] ?? 0) + cx, inc = income[b.id] ?? 0;
+      const perHead = heads ? c / heads : null;
+      return { b, c, cx, d: direct[b.id] ?? 0, inc, heads, projected: !harvested, perHead, price: perHead !== null ? priceForMargin(perHead, s.target_margin_pct) : null };
     }).filter((r) => r.c || r.inc);
-  }, [tx, batches, harvests]);
+  }, [tx, batches, harvests, s]);
 
   return (
-    <Section title="Cost per head & margin by batch" desc="Expenses tagged to a batch count directly. Shared costs (electricity, water, labour…) are split across batches in the system on that date by plant count. Tag sales and purchases to a batch in Income & expenses.">
+    <Section title="Cost per head & margin by batch" desc="Expenses tagged to a batch count directly. Shared costs (electricity, water, labour…) are split across batches in the system on that date by plant count. Capital equipment is recovered over the asset lifespan and split by pots used. Suggested price gives your target margin.">
       {!rows.length ? <p className="text-sm text-muted-foreground">No costs yet. Add expenses in Income & expenses.</p> : (
         <div className="overflow-x-auto"><Table>
-          <TableHeader><TableRow><TableHead>Batch</TableHead><TableHead className="text-right">Direct</TableHead><TableHead className="text-right">Total cost</TableHead><TableHead className="text-right">Heads</TableHead><TableHead className="text-right">Cost / head</TableHead><TableHead className="text-right">Sales</TableHead><TableHead className="text-right">Margin</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Batch</TableHead><TableHead className="text-right">Direct</TableHead><TableHead className="text-right">CapEx share</TableHead><TableHead className="text-right">Total cost</TableHead><TableHead className="text-right">Heads</TableHead><TableHead className="text-right">Cost / head</TableHead><TableHead className="text-right">Suggested price / head</TableHead><TableHead className="text-right">Sales</TableHead><TableHead className="text-right">Margin</TableHead></TableRow></TableHeader>
           <TableBody>{rows.map((r) => {
             const m = r.inc - r.c;
             return (
               <TableRow key={r.b.id}>
                 <TableCell className="font-medium">{r.b.code}</TableCell>
                 <TableCell className="text-right">{LKR(Math.round(r.d))}</TableCell>
+                <TableCell className="text-right">{LKR(Math.round(r.cx))}</TableCell>
                 <TableCell className="text-right">{LKR(Math.round(r.c))}</TableCell>
                 <TableCell className="text-right">{r.heads}{r.projected && <span className="text-xs text-muted-foreground"> (planned)</span>}</TableCell>
                 <TableCell className="text-right font-semibold">{r.perHead !== null ? LKR(+r.perHead.toFixed(2)) : "—"}</TableCell>
+                <TableCell className="text-right font-semibold">{r.price != null ? LKR(+r.price.toFixed(2)) : "—"}</TableCell>
                 <TableCell className="text-right">{r.inc ? LKR(r.inc) : "—"}</TableCell>
                 <TableCell className={`text-right font-semibold ${m < 0 ? "text-destructive" : "text-success"}`}>{r.inc ? `${LKR(Math.round(m))} (${Math.round((m / r.inc) * 100)}%)` : "—"}</TableCell>
               </TableRow>
@@ -297,6 +305,7 @@ const FIELDS: [keyof FarmSettings, string, string][] = [
   ["vpd_min", "Ideal VPD min (kPa)", "0.05"], ["vpd_max", "Ideal VPD max (kPa)", "0.05"],
   ["total_slots", "Total plant slots", "1"], ["kg_per_crate", "kg per crate", "0.1"],
   ["grow_days", "Transplant → harvest (days)", "1"], ["nursery_days", "Nursery (days)", "1"],
+  ["capex_years", "Asset lifespan (years)", "1"], ["cycles_per_year", "Harvest cycles per year", "1"], ["target_margin_pct", "Target profit margin (%)", "1"],
 ];
 
 function SettingsForm({ s }: { s: FarmSettings }) {

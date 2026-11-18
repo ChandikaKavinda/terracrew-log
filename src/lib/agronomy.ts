@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 export const DEFAULT_SETTINGS = {
   tank_liters: 500, albert_ec_per_g_l: 1.0, ph_down_ml: 5, ph_up_ml: 5,
   vpd_min: 0.8, vpd_max: 1.2, total_slots: 500, kg_per_crate: 5, grow_days: 35, nursery_days: 14,
+  capex_years: 5, cycles_per_year: 10, target_margin_pct: 25,
 };
 export type FarmSettings = typeof DEFAULT_SETTINGS;
 
@@ -121,18 +122,34 @@ export function shareCost(amount: number, plants: Record<string, number>): Recor
   return out;
 }
 
-export type SimInput = { plants: number; cycleDays: number; mortalityPct: number; headWeightG: number; dailyCost: number; inputCostPerPlant: number; packagingPerHead: number; pricePerHead: number };
+export type SimInput = { capexTotal?: number; capexYears?: number; cyclesPerYear?: number; targetMarginPct?: number; plants: number; cycleDays: number; mortalityPct: number; headWeightG: number; dailyCost: number; inputCostPerPlant: number; packagingPerHead: number; pricePerHead: number };
 /** Unit cost & profit for one harvest cycle. Daily overheads accrue over cycle days; packaging applies only to surviving heads. */
+/** Capital cost recovered per harvest cycle (straight-line over lifespan). */
+export function capexPerCycle(total: number, years: number, cyclesPerYear: number): number {
+  const n = years * cyclesPerYear;
+  return n > 0 ? total / n : 0;
+}
+/** Price that leaves the target margin on revenue after all costs. */
+export function priceForMargin(cost: number, marginPct: number): number | null {
+  const m = marginPct / 100;
+  return m < 1 ? cost / (1 - m) : null;
+}
 export function simulateUnitCost(i: SimInput) {
   const heads = Math.max(0, i.plants * (1 - Math.min(100, Math.max(0, i.mortalityPct)) / 100));
   const kg = (heads * i.headWeightG) / 1000;
-  const totalCost = i.dailyCost * i.cycleDays + i.plants * i.inputCostPerPlant + heads * i.packagingPerHead;
+  const opex = i.dailyCost * i.cycleDays + i.plants * i.inputCostPerPlant + heads * i.packagingPerHead;
+  const capex = capexPerCycle(i.capexTotal ?? 0, i.capexYears ?? 0, i.cyclesPerYear ?? 0);
+  const totalCost = opex + capex;
   const revenue = heads * i.pricePerHead;
   const profit = revenue - totalCost;
+  const costPerHead = heads > 0 ? totalCost / heads : null;
+  const rec = costPerHead != null ? priceForMargin(costPerHead, i.targetMarginPct ?? 0) : null;
   return {
-    heads: r(heads), kg: r(kg, 2), totalCost: r(totalCost, 2), revenue: r(revenue, 2), profit: r(profit, 2),
-    costPerKg: kg > 0 ? r(totalCost / kg, 2) : null, costPerHead: heads > 0 ? r(totalCost / heads, 2) : null,
+    heads: r(heads), kg: r(kg, 2), opex: r(opex, 2), capex: r(capex, 2), totalCost: r(totalCost, 2), revenue: r(revenue, 2), profit: r(profit, 2),
+    costPerKg: kg > 0 ? r(totalCost / kg, 2) : null, costPerHead: costPerHead != null ? r(costPerHead, 2) : null,
     pricePerKg: kg > 0 ? r(revenue / kg, 2) : null, marginPct: revenue > 0 ? r((profit / revenue) * 100, 1) : null,
     profitPerDay: i.cycleDays > 0 ? r(profit / i.cycleDays, 2) : null,
+    recommendedPerHead: rec != null ? r(rec, 2) : null,
+    recommendedPerKg: rec != null && kg > 0 ? r((rec * heads) / kg, 2) : null,
   };
 }
