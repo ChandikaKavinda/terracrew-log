@@ -120,3 +120,19 @@ export function shareCost(amount: number, plants: Record<string, number>): Recor
   for (const [k, v] of Object.entries(plants)) out[k] = total ? (amount * v) / total : 0;
   return out;
 }
+
+export type SimInput = { plants: number; cycleDays: number; mortalityPct: number; headWeightG: number; dailyCost: number; inputCostPerPlant: number; packagingPerHead: number; pricePerHead: number };
+/** Unit cost & profit for one harvest cycle. Daily overheads accrue over cycle days; packaging applies only to surviving heads. */
+export function simulateUnitCost(i: SimInput) {
+  const heads = Math.max(0, i.plants * (1 - Math.min(100, Math.max(0, i.mortalityPct)) / 100));
+  const kg = (heads * i.headWeightG) / 1000;
+  const totalCost = i.dailyCost * i.cycleDays + i.plants * i.inputCostPerPlant + heads * i.packagingPerHead;
+  const revenue = heads * i.pricePerHead;
+  const profit = revenue - totalCost;
+  return {
+    heads: r(heads), kg: r(kg, 2), totalCost: r(totalCost, 2), revenue: r(revenue, 2), profit: r(profit, 2),
+    costPerKg: kg > 0 ? r(totalCost / kg, 2) : null, costPerHead: heads > 0 ? r(totalCost / heads, 2) : null,
+    pricePerKg: kg > 0 ? r(revenue / kg, 2) : null, marginPct: revenue > 0 ? r((profit / revenue) * 100, 1) : null,
+    profitPerDay: i.cycleDays > 0 ? r(profit / i.cycleDays, 2) : null,
+  };
+}

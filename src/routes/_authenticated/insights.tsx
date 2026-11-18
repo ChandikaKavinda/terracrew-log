@@ -10,6 +10,7 @@ import { useProfiles, targetsOf, potZone, isBrix, type Zone } from "@/lib/crop-p
 import { DEFAULT_SETTINGS, dayNum, daysToTarget, harvestDay, remainingPlants, fromDayNum, shareCost, slope, useFarmSettings, type FarmSettings } from "@/lib/agronomy";
 import { usePopulation } from "@/lib/use-population";
 import { SeedingPrompts } from "@/components/seeding-prompts";
+import { ProfitSimulator } from "@/components/profit-simulator";
 import { toDateKey } from "@/lib/reminders";
 import { PageHeader, Section } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ function InsightsPage() {
       {batch && <Forecast batch={{ ...batch, plant_count: remainingPlants(batch, population?.harvested[batch.id], population?.lost[batch.id]) }} growth={growth} harvests={harvests} batches={batches} s={s} profile={profile} />}
       <SeedingPrompts />
       <Planner batches={liveBatches} s={s} />
+      <ProfitSimulator />
       {me?.isOwner && <Economics batches={batches} harvests={harvests} />}
       {me?.isOwner && <SettingsForm s={s} />}
     </div>

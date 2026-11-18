@@ -1,0 +1,1 @@
+ALTER TABLE public.growth_measurements ADD COLUMN width_cm numeric;

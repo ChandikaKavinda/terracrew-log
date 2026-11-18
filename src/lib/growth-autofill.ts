@@ -12,6 +12,7 @@ export type GrowthMeasurementRow = {
   measured_on: string;
   created_at?: string | null;
   height_cm: number | null;
+  width_cm?: number | null;
   leaf_count: number | null;
   variety: string | null;
   pot_id: string | null;

@@ -391,6 +391,7 @@ export type Database = {
           plant_no: number
           pot_id: string | null
           variety: string | null
+          width_cm: number | null
           zone: string | null
         }
         Insert: {
@@ -404,6 +405,7 @@ export type Database = {
           plant_no: number
           pot_id?: string | null
           variety?: string | null
+          width_cm?: number | null
           zone?: string | null
         }
         Update: {
@@ -417,6 +419,7 @@ export type Database = {
           plant_no?: number
           pot_id?: string | null
           variety?: string | null
+          width_cm?: number | null
           zone?: string | null
         }
         Relationships: [

@@ -113,8 +113,8 @@ function CheckPage() {
   const nursery = batches.filter((b) => b.status === "nursery");
 
   const [f, setF] = useState(emptyForm);
-  const [growth, setGrowth] = useState(Array.from({ length: 10 }, () => ({ h: "", l: "", v: "", pot: "" })));
-  const [prev, setPrev] = useState<({ h: number | null; l: number | null } | null)[]>([]);
+  const [growth, setGrowth] = useState(Array.from({ length: 10 }, () => ({ h: "", w: "", l: "", v: "", pot: "" })));
+  const [prev, setPrev] = useState<({ h: number | null; w?: number | null; l: number | null } | null)[]>([]);
   const [issues, setIssues] = useState<string[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [qNotes, setQNotes] = useState("");
@@ -164,7 +164,7 @@ function CheckPage() {
     setGerm({ batch_id: c.nursery_batch_id ?? "", germinated: s(c.germinated_count), notes: c.germination_notes ?? "" });
     setGrowth(Array.from({ length: 10 }, (_, i) => {
       const r = editData.growth.find((x) => x.plant_no === i + 1);
-      return { h: s(r?.height_cm), l: s(r?.leaf_count), v: r?.variety ?? "", pot: r?.pot_id ?? "" };
+      return { h: s(r?.height_cm), w: s(r?.width_cm), l: s(r?.leaf_count), v: r?.variety ?? "", pot: r?.pot_id ?? "" };
     }));
     const q = editData.quality;
     const dc = (q?.defect_counts ?? {}) as Record<string, number>;
@@ -188,11 +188,11 @@ function CheckPage() {
     const rows = lastGrowth ?? [];
     const p = Array.from({ length: 10 }, (_, i) => {
       const r = rows.find((x) => x.plant_no === i + 1);
-      return r ? { h: r.height_cm, l: r.leaf_count, v: r.variety, pot: r.pot_id } : null;
+      return r ? { h: r.height_cm, w: r.width_cm ?? null, l: r.leaf_count, v: r.variety, pot: r.pot_id } : null;
     });
     setPrev(p);
     if (edit) return; // keep the saved values when editing
-    setGrowth(p.map((x, i) => ({ h: x?.h != null ? String(x.h) : "", l: x?.l != null ? String(x.l) : "", v: x?.v ?? selBatch?.variety ?? "", pot: x?.pot ?? selBatch?.sentinel_pot_ids?.[i] ?? "" })));
+    setGrowth(p.map((x, i) => ({ h: x?.h != null ? String(x.h) : "", w: x?.w != null ? String(x.w) : "", l: x?.l != null ? String(x.l) : "", v: x?.v ?? selBatch?.variety ?? "", pot: x?.pot ?? selBatch?.sentinel_pot_ids?.[i] ?? "" })));
   }, [lastGrowth, f.batch_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const defective = Object.entries(counts).filter(([k]) => tags.includes(k)).reduce((a, [, v]) => a + (v || 0), 0);
@@ -233,8 +233,8 @@ function CheckPage() {
 
       if (f.batch_id) {
         const rows = growth
-          .map((g, i) => ({ batch_id: f.batch_id, check_id: checkId, plant_no: i + 1, zone: zone(i), pot_id: g.pot || null, variety: g.v || null, measured_on: f.check_date, height_cm: num(g.h), leaf_count: g.l ? Math.round(Number(g.l)) : null }))
-          .filter((r) => r.height_cm !== null || r.leaf_count !== null);
+          .map((g, i) => ({ batch_id: f.batch_id, check_id: checkId, plant_no: i + 1, zone: zone(i), pot_id: g.pot || null, variety: g.v || null, measured_on: f.check_date, height_cm: num(g.h), width_cm: num(g.w), leaf_count: g.l ? Math.round(Number(g.l)) : null }))
+          .filter((r) => r.height_cm !== null || r.width_cm !== null || r.leaf_count !== null);
         if (rows.length) {
           const { error: ge } = await supabase.from("growth_measurements").upsert(rows, { onConflict: "batch_id,plant_no,measured_on" });
           if (ge) throw ge;
@@ -351,7 +351,7 @@ function CheckPage() {
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {growth.map((g, i) => {
-            const set = (k: "h" | "l" | "v" | "pot", val: string) => setGrowth((x) => x.map((y, j) => (j === i ? { ...y, [k]: val } : y)));
+            const set = (k: "h" | "w" | "l" | "v" | "pot", val: string) => setGrowth((x) => x.map((y, j) => (j === i ? { ...y, [k]: val } : y)));
             const p = prev[i]; const z = zone(i);
             const leaves = Number(g.l) || 0;
             return (
@@ -360,12 +360,13 @@ function CheckPage() {
                 <Input disabled={!f.batch_id} aria-label={`Pot ID for plant ${i + 1}`} className={cn("mb-1 h-9 bg-background text-xs font-semibold uppercase", g.pot && !validPotId(g.pot) && "border-destructive")} placeholder="Pot ID e.g. 1A1" value={g.pot} onChange={(e) => set("pot", e.target.value.toUpperCase().replace(/\s/g, ""))} />
                 <Input disabled={!f.batch_id} className="mb-1 h-9 bg-background text-xs" placeholder="Variety" value={g.v} onChange={(e) => set("v", e.target.value)} />
                 <Input disabled={!f.batch_id} className="h-11 bg-background" inputMode="decimal" placeholder="Height cm" type="number" step="0.1" value={g.h} onChange={(e) => set("h", e.target.value)} />
+                <Input disabled={!f.batch_id} className="mt-1 h-11 bg-background" inputMode="decimal" placeholder="Width cm" type="number" step="0.1" value={g.w} onChange={(e) => set("w", e.target.value)} />
                 <div className="mt-1 flex items-center gap-1">
                   <Button type="button" variant="outline" size="icon" className="h-11 w-11 shrink-0" disabled={!f.batch_id || leaves === 0} onClick={() => set("l", String(Math.max(0, leaves - 1)))}><Minus /></Button>
                   <div className="flex-1 text-center"><div className="text-lg font-bold tabular-nums text-foreground">{g.l || 0}</div><div className="text-[10px] text-muted-foreground">leaves</div></div>
                   <Button type="button" size="icon" className="h-11 w-11 shrink-0" disabled={!f.batch_id} onClick={() => set("l", String(leaves + 1))}><Plus /></Button>
                 </div>
-                {p && <div className="mt-1 text-center text-[10px] text-muted-foreground">Prev {p.h ?? "–"} cm · {p.l ?? "–"} lv</div>}
+                {p && <div className="mt-1 text-center text-[10px] text-muted-foreground">Prev {p.h ?? "–"}h · {p.w ?? "–"}w cm · {p.l ?? "–"} lv</div>}
               </div>
             );
           })}
