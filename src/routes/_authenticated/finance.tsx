@@ -24,7 +24,7 @@ export const Route = createFileRoute("/_authenticated/finance")({
 
 const cats = {
   income: ["Lettuce sales", "Other produce", "Other"],
-  expense: ["Nutrients", "Seeds", "Substrates", "Chemicals", "Packaging", "Equipment", "Spares", "Electricity", "Water", "Labour", "Transport", "Repairs", "Other"],
+  expense: ["Nutrients", "Seeds", "Substrates", "Chemicals", "Packaging", "Equipment", "Capital equipment", "Spares", "Electricity", "Water", "Labour", "Transport", "Repairs", "Other"],
 };
 
 function FinancePage() {
